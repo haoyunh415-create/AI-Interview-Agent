@@ -1,6 +1,9 @@
 from agents.base import BaseAgent
 from core.rag_engine import retrieve, retrieve_with_metadata, rag_query
 from core.config import RETRIEVAL_SCORE_THRESHOLD
+from core.logging_config import get_logger
+
+_log = get_logger("agent.knowledge_retriever")
 
 KNOWLEDGE_RETRIEVER_ROLE = """你是一位知识检索官（Knowledge Retriever Agent）。
 你的职责是从知识库中检索最相关的内容，为面试官和评价官提供参考依据。
@@ -46,4 +49,6 @@ class KnowledgeRetriever(BaseAgent):
 
     def get_topic_context(self, topic):
         """Get knowledge context for a given interview topic."""
-        return self.search(topic)
+        result = self.search(topic)
+        _log.info("topic=%s len=%d", topic, len(result) if result else 0)
+        return result

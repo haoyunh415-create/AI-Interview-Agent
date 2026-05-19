@@ -5,13 +5,16 @@ All public functions preserve their original signatures so existing callers
 """
 
 import json
+import time
 from agents.orchestrator import InterviewOrchestrator, STAGES
 from agents.interviewer import Interviewer, get_level_bias
 from agents.evaluator import Evaluator, MAX_FOLLOWUPS_PER_STAGE
 from agents.report_writer import ReportWriter
+from core.logging_config import get_logger, log_duration
 
-# ── Re-exported constants ──
-# STAGES, MAX_FOLLOWUPS_PER_STAGE imported above
+_log = get_logger("interview")
+
+# Re-exported constants
 
 TOPICS = {
     "Transformer核心原理": ["self-attention", "multi-head", "encoder-decoder", "positional encoding", "transformer架构"],
@@ -41,7 +44,7 @@ CUSTOM_JOB_PROMPT = """你是一位资深的技术面试官。请根据以下岗
 直接输出问题列表："""
 
 
-# ── Singleton orchestrator ──
+# Singleton orchestrator
 _orchestrator = None
 _last_api_key = None
 
@@ -49,6 +52,7 @@ _last_api_key = None
 def _get_orchestrator(api_key=None):
     global _orchestrator, _last_api_key
     if _orchestrator is None or _last_api_key != api_key:
+        _log.info("creating new orchestrator")
         _orchestrator = InterviewOrchestrator(api_key)
         _last_api_key = api_key
     return _orchestrator
@@ -56,6 +60,7 @@ def _get_orchestrator(api_key=None):
 
 def reset_orchestrator():
     global _orchestrator
+    _log.info("resetting orchestrator")
     _orchestrator = None
 
 
@@ -79,9 +84,27 @@ def generate_custom_questions(job_description, api_key=None):
     return questions[:5]
 
 
+def generate_custom_questions_stream(job_description, api_key=None):
+    """Streaming variant: yield question tokens as they generate."""
+    prompt = CUSTOM_JOB_PROMPT.format(job_description=job_description)
+    interviewer = Interviewer(api_key)
+    yield from interviewer.invoke_stream(prompt)
+
+
 def get_hints(question, api_key=None):
     interviewer = Interviewer(api_key)
     return interviewer.generate_hint(question)
+
+
+def get_hints_stream(question, api_key=None):
+    """Streaming variant: yield hint tokens."""
+    interviewer = Interviewer(api_key)
+    yield from interviewer.invoke_stream(
+        "基于这个问题，给考生一个简短的提示（10字以内），帮助他们理清答题方向。\n"
+        f"问题：{question}\n"
+        "只输出一个简洁的提示，不要多余内容：\n",
+        temperature=0.3,
+    )
 
 
 def evaluate(question, answer, stage, api_key=None):
@@ -94,22 +117,23 @@ def generate_summary(questions, answers, scores, api_key=None):
     return writer.generate_summary(questions, answers, scores)
 
 
-def step(user, topic, context, idx, question=None, answer=None, history=None, resume=None, custom_questions=None, api_key=None):
-    """Run one step of the interview. Returns a dict with full state.
+def generate_summary_stream(questions, answers, scores, profile=None, api_key=None):
+    """Streaming variant: yield summary tokens."""
+    writer = ReportWriter(api_key)
+    yield from writer.generate_summary_stream(questions, answers, scores, profile)
 
-    When answer is None (starting):
-        {"question": str, "stage_idx": int, "is_followup": False}
 
-    When answer is given:
-        {"report": str, "next_q": str|None, "next_idx": int,
-         "is_followup": bool, "stage_completed": bool,
-         "all_completed": bool, "score_json": dict}
-    """
+def step(user, topic, context, idx, question=None, answer=None, history=None,
+         resume=None, custom_questions=None, api_key=None):
+    """Run one step of the interview. Returns a dict with full state."""
     orch = _get_orchestrator(api_key)
+    t0 = time.monotonic()
 
     if resume:
         orch.analyze_resume(resume)
     if not orch._context:
         orch.fetch_context(topic)
 
-    return orch.step(user, topic, idx, question, answer, history, resume, custom_questions)
+    result = orch.step(user, topic, idx, question, answer, history, resume, custom_questions)
+    log_duration(_log, f"step (stage={idx}, is_answer={answer is not None})", t0)
+    return result

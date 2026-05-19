@@ -1,4 +1,7 @@
 from agents.base import BaseAgent
+from core.logging_config import get_logger
+
+_log = get_logger("agent.evaluator")
 
 EVALUATOR_ROLE = """你是一位严格的面试评价官（Evaluator Agent）。
 你的职责是对候选人的回答进行多维度打分和点评。
@@ -70,6 +73,9 @@ class Evaluator(BaseAgent):
         if followup_count >= MAX_FOLLOWUPS_PER_STAGE:
             result["needs_followup"] = False
 
+        _log.info("scores: correctness=%s logic=%s depth=%s expression=%s",
+                  result.get("correctness"), result.get("logic"),
+                  result.get("depth"), result.get("expression"))
         return result
 
     def should_followup(self, score_json):

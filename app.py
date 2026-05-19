@@ -4,9 +4,13 @@ from html import escape
 import streamlit as st
 from dotenv import load_dotenv
 from core.config import RETRIEVAL_SCORE_THRESHOLD
-from core.rag_engine import retrieve, retrieve_with_metadata, rag_query
-from core.interview_engine import step, STAGES, get_topic_keywords, get_hints, generate_summary
-from agents.orchestrator import InterviewOrchestrator
+from core.rag_engine import retrieve_with_metadata, rag_query_stream
+from core.interview_engine import (
+    STAGES, get_topic_keywords,
+    generate_custom_questions_stream,
+    get_hints_stream, generate_summary_stream, _get_orchestrator,
+)
+from agents.evaluator import MAX_FOLLOWUPS_PER_STAGE
 from db.database import init_db, load_user
 from report.report_generator import generate_pdf
 
@@ -347,14 +351,6 @@ if "followup_count" not in st.session_state:
     st.session_state.followup_count = 0
 
 
-def _safe_retrieve(target):
-    try:
-        return retrieve(target)
-    except FileNotFoundError as e:
-        st.error(str(e))
-        st.stop()
-
-
 def _html(text):
     return escape("" if text is None else str(text))
 
@@ -408,11 +404,17 @@ if mode == "AI Interview":
                     label_visibility="collapsed",
                 )
                 if custom_job_desc and st.button("Generate Custom Questions", use_container_width=True):
-                    with st.spinner("AI generating questions..."):
-                        from core.interview_engine import generate_custom_questions
-                        custom_questions = generate_custom_questions(custom_job_desc, api_key)
-                        st.session_state.custom_questions = custom_questions
-                        st.success("5 custom questions generated!")
+                    with st.spinner(""):
+                        stream = generate_custom_questions_stream(custom_job_desc, api_key)
+                        full_response = st.write_stream(stream)
+                    questions = [
+                        q.strip() for q in full_response.split("\n")
+                        if q.strip() and (q[0].isdigit() or q.startswith("-") or q.startswith("*"))
+                    ]
+                    if not questions:
+                        questions = [q.strip() for q in full_response.split("\n") if len(q.strip()) > 10]
+                    st.session_state.custom_questions = questions[:5]
+                    st.success(f"{len(st.session_state.custom_questions)} custom questions generated!")
                 if "custom_questions" in st.session_state and st.session_state.custom_questions:
                     with st.expander("Generated Questions"):
                         for i, q in enumerate(st.session_state.custom_questions):
@@ -442,18 +444,25 @@ if mode == "AI Interview":
         # ── Start interview ──
         if st.session_state.current_q is None:
             if st.button("Start Interview", type="primary", use_container_width=True):
-                with st.spinner("Preparing your interview..."):
-                    context = _safe_retrieve(internal_topic) if interview_target != "Custom Job" else ""
+                with st.spinner(""):
+                    orch = _get_orchestrator(api_key)
+                    if full_resume.strip():
+                        orch.analyze_resume(full_resume)
+                    try:
+                        orch.fetch_context(internal_topic)
+                    except FileNotFoundError as e:
+                        if interview_target != "Custom Job":
+                            st.error(str(e))
+                            st.stop()
                     custom_qs = st.session_state.get("custom_questions", None)
-                    result = step(
-                        user, internal_topic, context,
-                        st.session_state.stage_index,
-                        resume=full_resume if full_resume.strip() else None,
+                    stream = orch.generate_question_stream(
+                        internal_topic, st.session_state.stage_index,
+                        history=st.session_state.history,
                         custom_questions=custom_qs,
-                        api_key=api_key,
                     )
-                    st.session_state.current_q = result["question"]
-                    st.session_state.is_followup = result.get("is_followup", False)
+                    question = st.write_stream(stream)
+                    st.session_state.current_q = question
+                    st.session_state.is_followup = False
                     st.rerun()
         else:
             # ── Question card ──
@@ -474,13 +483,17 @@ if mode == "AI Interview":
             with col_h1:
                 if st.button("Get Hint", use_container_width=True):
                     st.session_state.show_hint = True
+                    stream = get_hints_stream(st.session_state.current_q, api_key)
+                    st.session_state.hint_text = st.write_stream(stream)
             with col_h2:
                 if st.button("Hide Hint", use_container_width=True):
                     st.session_state.show_hint = False
+                    st.session_state.hint_text = None
 
             if st.session_state.show_hint:
-                hint = get_hints(st.session_state.current_q, api_key)
-                st.markdown(f'<div class="hint-box">{_html(hint)}</div>', unsafe_allow_html=True)
+                hint_text = st.session_state.get("hint_text")
+                if hint_text:
+                    st.markdown(f'<div class="hint-box">{_html(hint_text)}</div>', unsafe_allow_html=True)
 
             # ── Answer form ──
             with st.form(key="ans_form", clear_on_submit=True):
@@ -490,34 +503,48 @@ if mode == "AI Interview":
 
             if submit:
                 if answer.strip():
-                    with st.spinner("AI evaluating your answer..."):
-                        context = _safe_retrieve(internal_topic) if interview_target != "Custom Job" else ""
-                        result = step(
-                            user, internal_topic, context,
-                            st.session_state.stage_index,
-                            st.session_state.current_q,
-                            answer,
-                            st.session_state.history,
-                            resume=full_resume if full_resume.strip() else None,
-                            custom_questions=st.session_state.get("custom_questions", None),
-                            api_key=api_key,
-                        )
-                        st.session_state.history.append({"q": st.session_state.current_q, "a": answer})
-                        st.session_state.last_score = result["report"]
-                        st.session_state.show_hint = False
+                    orch = _get_orchestrator(api_key)
+                    if full_resume.strip():
+                        orch.analyze_resume(full_resume)
+                    try:
+                        orch.fetch_context(internal_topic)
+                    except FileNotFoundError as e:
+                        if interview_target != "Custom Job":
+                            st.error(str(e))
+                            st.stop()
 
-                        if result.get("all_completed"):
-                            st.session_state.current_q = "All stages completed. View your report."
-                            st.session_state.is_followup = False
-                            st.balloons()
-                        elif result.get("is_followup"):
-                            st.session_state.current_q = result["next_q"]
-                            st.session_state.is_followup = True
-                        else:
-                            st.session_state.current_q = result["next_q"]
-                            st.session_state.stage_index = result["next_idx"]
-                            st.session_state.is_followup = False
-                        st.rerun()
+                    with st.spinner("AI evaluating your answer..."):
+                        score_json, report, needs_followup = orch.evaluate_answer(
+                            user, internal_topic,
+                            st.session_state.current_q, answer,
+                            st.session_state.stage_index,
+                        )
+
+                    st.session_state.history.append({"q": st.session_state.current_q, "a": answer})
+                    st.session_state.last_score = report
+                    st.session_state.show_hint = False
+
+                    if needs_followup and orch.followup_count < MAX_FOLLOWUPS_PER_STAGE:
+                        stream = orch.generate_followup_stream(
+                            st.session_state.current_q, answer, score_json,
+                            st.session_state.stage_index,
+                        )
+                        st.session_state.current_q = st.write_stream(stream)
+                        st.session_state.is_followup = True
+                    elif st.session_state.stage_index >= len(STAGES) - 1:
+                        st.session_state.current_q = "All stages completed. View your report."
+                        st.session_state.is_followup = False
+                        st.balloons()
+                    else:
+                        next_idx = st.session_state.stage_index + 1
+                        stream = orch.generate_question_stream(
+                            internal_topic, next_idx, st.session_state.history,
+                            custom_questions=st.session_state.get("custom_questions"),
+                        )
+                        st.session_state.current_q = st.write_stream(stream)
+                        st.session_state.stage_index = next_idx
+                        st.session_state.is_followup = False
+                    st.rerun()
                 else:
                     st.warning("Please provide an answer.")
 
@@ -560,10 +587,10 @@ elif mode == "Report":
             st.caption(f"Last saved: {stats['last_time']}")
 
         if api_key:
-            with st.spinner("Generating AI summary..."):
-                summary = generate_summary(questions, answers, scores, api_key)
             with st.expander("AI Summary", expanded=True):
-                st.markdown(summary)
+                with st.spinner(""):
+                    stream = generate_summary_stream(questions, answers, scores, api_key=api_key)
+                    st.write_stream(stream)
         else:
             st.warning("Configure your API Key to generate AI summaries.")
 
@@ -635,20 +662,15 @@ elif mode == "RAG Search":
                     </div>
                     """, unsafe_allow_html=True)
             else:
-                with st.spinner("Searching & generating answer..."):
-                    try:
-                        answer, sources = rag_query(q, api_key)
-                    except FileNotFoundError as e:
-                        st.error(str(e))
-                        st.stop()
-
-                st.divider()
-                st.markdown(f"""
-                <div class="card" style="border-color:rgba(34,197,94,0.4);">
-                    <div class="card-header">AI Generated Answer</div>
-                    <div class="card-content" style="font-size:1.05rem;line-height:1.8;">{_html(answer)}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                try:
+                    st.divider()
+                    st.markdown('<div class="card" style="border-color:rgba(34,197,94,0.4);"><div class="card-header">AI Generated Answer</div></div>', unsafe_allow_html=True)
+                    with st.spinner(""):
+                        stream = rag_query_stream(q, api_key)
+                        st.write_stream(stream)
+                except FileNotFoundError as e:
+                    st.error(str(e))
+                    st.stop()
 
 # ═══════════════════════════════════════
 # MODE: Knowledge Base Management

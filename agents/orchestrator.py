@@ -1,11 +1,14 @@
+import time
 from db.database import save
 from agents.resume_analyst import ResumeAnalyst
 from agents.interviewer import Interviewer, get_level_bias
 from agents.evaluator import Evaluator, MAX_FOLLOWUPS_PER_STAGE
 from agents.knowledge_retriever import KnowledgeRetriever
 from agents.report_writer import ReportWriter
+from core.logging_config import get_logger, log_duration
 
 STAGES = ["基础", "原理", "进阶", "项目", "挑战"]
+_log = get_logger("orchestrator")
 
 
 class InterviewOrchestrator:
@@ -97,6 +100,7 @@ class InterviewOrchestrator:
         """Evaluate answer and decide whether to follow up or move on."""
         stage = STAGES[stage_idx]
         self._status = "evaluating"
+        t0 = time.monotonic()
 
         score_json = self.evaluator.evaluate(
             question, answer, stage, self._followup_count
@@ -104,14 +108,45 @@ class InterviewOrchestrator:
         save(user, topic, question, answer, score_json, stage)
 
         needs_followup = self.evaluator.should_followup(score_json)
+        log_duration(_log, f"evaluate stage={stage} followup={needs_followup}", t0)
 
         report = self.evaluator.format_report(score_json)
         self._status = "scored"
         return score_json, report, needs_followup
 
+    # ── Streaming question generation ──
+    def generate_question_stream(self, topic, stage_idx, history=None, custom_questions=None):
+        """Stream question generation. Resets followup counter."""
+        self._followup_count = 0
+        stage = STAGES[stage_idx]
+        self._status = "questioning"
+        yield from self.interviewer.generate_question_stream(
+            topic=topic,
+            stage=stage,
+            context=self._context,
+            history=history,
+            profile=self._profile,
+            custom_questions=custom_questions,
+        )
+
+    def generate_followup_stream(self, original_question, answer, evaluation, stage_idx):
+        """Stream follow-up question generation."""
+        stage = STAGES[stage_idx]
+        self._status = "followup"
+        self._followup_count += 1
+        yield from self.interviewer.generate_followup_stream(
+            original_question=original_question,
+            answer=answer,
+            evaluation=evaluation,
+            stage=stage,
+        )
+
     # ── Hint generation ──
     def generate_hint(self, question):
         return self.interviewer.generate_hint(question)
+
+    def generate_hint_stream(self, question):
+        yield from self.interviewer.generate_hint_stream(question)
 
     # ── Final report ──
     def generate_report(self, questions, answers, scores):

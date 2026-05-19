@@ -21,10 +21,9 @@ class ReportWriter(BaseAgent):
             api_key=api_key,
         )
 
-    def generate_summary(self, questions, answers, scores, profile=None):
-        """Generate a comprehensive interview summary."""
+    def _build_summary_prompt(self, questions, answers, scores, profile=None):
         if not questions:
-            return "暂无面试记录"
+            return None
 
         profile_context = ""
         if profile and profile.get("tech_stack"):
@@ -36,7 +35,7 @@ class ReportWriter(BaseAgent):
                 f"- 项目亮点：{', '.join(profile.get('highlights', []))}\n"
             )
 
-        prompt = (
+        return (
             "请总结这场面试的整体表现：\n\n"
             f"问题列表：{questions}\n"
             f"回答列表：{answers}\n"
@@ -51,7 +50,19 @@ class ReportWriter(BaseAgent):
             "6. 下一步面试准备建议\n\n"
             "用中文输出，条理清晰，使用适当的标题和分段。\n"
         )
+
+    def generate_summary(self, questions, answers, scores, profile=None):
+        prompt = self._build_summary_prompt(questions, answers, scores, profile)
+        if prompt is None:
+            return "暂无面试记录"
         return self.invoke(prompt)
+
+    def generate_summary_stream(self, questions, answers, scores, profile=None):
+        prompt = self._build_summary_prompt(questions, answers, scores, profile)
+        if prompt is None:
+            yield "暂无面试记录"
+            return
+        yield from self.invoke_stream(prompt)
 
     def generate_final_report(self, history, profile=None):
         """Generate a final report from interview history records."""

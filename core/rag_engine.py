@@ -1,20 +1,27 @@
 import os
+import time
+import re
 from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from core.config import EMBEDDING_PATH, MODEL_PATH, DB_PATH, RETRIEVAL_FETCH, RETRIEVAL_SCORE_THRESHOLD
 from core.llm import get_llm
+from core.logging_config import get_logger, log_duration
 
 _embedding = None
 _db = None
+_log = get_logger("rag")
 
 
 def get_embedding():
     global _embedding
     if _embedding is None:
+        _log.info("loading embedding model from %s", EMBEDDING_PATH)
+        t0 = time.monotonic()
         _embedding = HuggingFaceEmbeddings(
             model_name=EMBEDDING_PATH,
             cache_folder=MODEL_PATH,
         )
+        log_duration(_log, "embedding model load", t0)
     return _embedding
 
 
@@ -23,11 +30,9 @@ def get_db():
     if _db is None:
         if not os.path.exists(DB_PATH) or not os.listdir(DB_PATH):
             raise FileNotFoundError("Knowledge base not initialized. Run: python -m core.ingest_knowledge")
+        _log.info("opening ChromaDB at %s", DB_PATH)
         _db = Chroma(persist_directory=DB_PATH, embedding_function=get_embedding())
     return _db
-
-
-import re
 
 
 def _keyword_overlap_penalty(query, text):
@@ -115,6 +120,7 @@ def rag_query(query, api_key=None):
     if result is None:
         return "No relevant content found in the knowledge base.", []
     doc, _score = result
+    _log.info("RAG query: score=%.1f", _score)
 
     prompt = (
         "You are an AI knowledge assistant. Answer based on the reference material.\n\n"
@@ -131,3 +137,29 @@ def rag_query(query, api_key=None):
     response = get_llm(api_key).invoke(prompt).content
     source = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
     return response, [source]
+
+
+def rag_query_stream(query, api_key=None):
+    """Streaming RAG: retrieve then yield answer tokens."""
+    result = search_best(query)
+    if result is None:
+        yield "No relevant content found in the knowledge base."
+        return
+    doc, _score = result
+    _log.info("RAG stream query: score=%.1f", _score)
+
+    prompt = (
+        "You are an AI knowledge assistant. Answer based on the reference material.\n\n"
+        "Reference:\n"
+        f"{doc.page_content}\n\n"
+        f"Question: {query}\n\n"
+        "Requirements:\n"
+        "1. Answer based on the reference, do not fabricate\n"
+        "2. Be concise and direct\n"
+        "3. If the reference is insufficient, honestly state so\n\n"
+        "Answer:\n"
+    )
+
+    for chunk in get_llm(api_key).stream(prompt):
+        if chunk.content:
+            yield chunk.content

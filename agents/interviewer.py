@@ -51,6 +51,29 @@ class Interviewer(BaseAgent):
             if idx < len(custom_questions):
                 return custom_questions[idx]
 
+        prompt = self._build_question_prompt(topic, stage, context, history, profile)
+        return self.invoke(prompt)
+
+    def generate_question_stream(
+        self,
+        topic,
+        stage,
+        context="",
+        history=None,
+        profile=None,
+        custom_questions=None,
+    ):
+        """Streaming variant: yield question tokens."""
+        if custom_questions and history:
+            idx = len(history)
+            if idx < len(custom_questions):
+                yield custom_questions[idx]
+                return
+
+        prompt = self._build_question_prompt(topic, stage, context, history, profile)
+        yield from self.invoke_stream(prompt)
+
+    def _build_question_prompt(self, topic, stage, context, history, profile):
         history_context = ""
         if history:
             history_context = "\n已问过的问题：\n" + "\n".join(
@@ -68,7 +91,7 @@ class Interviewer(BaseAgent):
             )
             level_bias = get_level_bias(profile)
 
-        prompt = (
+        return (
             f"当前主题：{topic}\n"
             f"当前阶段：{stage}\n"
             f"参考知识：{context}\n"
@@ -83,14 +106,20 @@ class Interviewer(BaseAgent):
             "5. 语气专业自然\n\n"
             "直接输出问题：\n"
         )
-        return self.invoke(prompt)
 
     def generate_followup(self, original_question, answer, evaluation, stage):
-        """Generate a follow-up question based on the previous answer's weakness."""
+        prompt = self._build_followup_prompt(original_question, answer, evaluation, stage)
+        return self.invoke(prompt, temperature=0.6)
+
+    def generate_followup_stream(self, original_question, answer, evaluation, stage):
+        prompt = self._build_followup_prompt(original_question, answer, evaluation, stage)
+        yield from self.invoke_stream(prompt, temperature=0.6)
+
+    def _build_followup_prompt(self, original_question, answer, evaluation, stage):
         followup_reason = evaluation.get("followup_reason", "回答不够深入")
         weakness_summary = evaluation.get("summary", "")
 
-        prompt = (
+        return (
             "你是一位技术面试官，需要对候选人的回答进行追问。\n\n"
             f"原问题：{original_question}\n"
             f"候选人回答：{answer}\n"
@@ -105,13 +134,18 @@ class Interviewer(BaseAgent):
             "5. 不要重复原问题\n\n"
             "直接输出追问问题：\n"
         )
-        return self.invoke(prompt, temperature=0.6)
 
     def generate_hint(self, question):
-        """Generate a short hint for the given question."""
-        prompt = (
+        prompt = self._build_hint_prompt(question)
+        return self.invoke(prompt, temperature=0.3)
+
+    def generate_hint_stream(self, question):
+        prompt = self._build_hint_prompt(question)
+        yield from self.invoke_stream(prompt, temperature=0.3)
+
+    def _build_hint_prompt(self, question):
+        return (
             "基于这个问题，给考生一个简短的提示（10字以内），帮助他们理清答题方向。\n"
             f"问题：{question}\n"
             "只输出一个简洁的提示，不要多余内容：\n"
         )
-        return self.invoke(prompt, temperature=0.3)

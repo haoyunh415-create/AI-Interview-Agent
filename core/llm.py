@@ -1,8 +1,10 @@
 import os
 from langchain_openai import ChatOpenAI
 from core.config import LLM_MODEL, LLM_BASE_URL, LLM_TEMPERATURE, LLM_TIMEOUT, LLM_MAX_RETRIES
+from core.logging_config import get_logger
 
 _llms = {}
+_log = get_logger("llm")
 
 
 def get_llm(api_key=None, temperature=None):
@@ -13,6 +15,7 @@ def get_llm(api_key=None, temperature=None):
 
     key = (api_key or "", temperature)
     if key not in _llms:
+        _log.info("creating new LLM instance (temp=%.1f)", temperature)
         _llms[key] = ChatOpenAI(
             model=LLM_MODEL,
             api_key=api_key,
