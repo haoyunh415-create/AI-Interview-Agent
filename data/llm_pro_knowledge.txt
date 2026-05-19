@@ -1,0 +1,164 @@
+# 一、Transformer（核心必问）
+
+## 1. Transformer架构
+Transformer是基于自注意力机制的序列建模架构，完全摒弃RNN/CNN。
+
+组成：
+- Encoder（编码器）
+- Decoder（解码器）
+
+每层包含：
+- Multi-Head Attention
+- Feed Forward Network
+- Residual + LayerNorm
+
+---
+
+## 2. Self-Attention机制
+输入通过三组线性变换得到：
+- Query (Q)
+- Key (K)
+- Value (V)
+
+计算：
+Attention(Q,K,V) = softmax(QK^T / sqrt(d_k)) V
+
+作用：
+- 建立全局依赖关系
+- 捕捉长距离信息
+
+---
+
+## 3. 为什么要除以 sqrt(d_k)
+防止点积过大导致：
+- softmax梯度消失
+- 训练不稳定
+
+---
+
+## 4. Multi-Head Attention
+将注意力拆成多个子空间：
+- 提升表达能力
+- 捕捉不同语义关系
+
+---
+
+# 二、大模型（LLM）
+
+## 1. 什么是大模型（LLM）
+Large Language Model，基于Transformer架构的大规模预训练语言模型。
+
+代表模型：
+- GPT系列（OpenAI）：GPT-3/3.5/4，以强大的生成和推理能力著称
+- BERT系列（Google）：以双向编码和语言理解见长
+- LLaMA系列（Meta）：开源大模型的标杆
+- Claude系列（Anthropic）：注重安全性和有用性的对话模型
+
+核心特点：
+- 参数量大（十亿至万亿级参数）
+- 通过海量数据预训练获得广博知识
+- 具备涌现能力（Emergent Ability）：规模突破阈值后突然显现的新能力
+- 通过指令微调和RLHF对齐人类意图
+
+---
+
+## 2. 训练流程
+1. 预训练（大规模语料）
+2. 指令微调（SFT）
+3. 对齐（RLHF）
+
+---
+
+## 3. RLHF
+Reinforcement Learning from Human Feedback，基于人类反馈的强化学习
+
+核心思想：让人类对模型生成的多个回答进行排序，用排序数据训练奖励模型（Reward Model），再通过PPO算法优化语言模型的输出，使其更符合人类偏好。
+
+步骤：
+1. 收集人类偏好数据：让标注人员对同一prompt的多个回答排序
+2. 训练奖励模型（RM）：学习人类的偏好模式，预测回答的质量分数
+3. PPO优化：使用奖励模型给出的分数作为奖励信号，通过PPO算法更新LLM参数
+
+关键点：
+- 奖励模型需要高质量的人类偏好标注数据
+- PPO训练需要在大模型和奖励模型之间平衡，防止奖励过拟合
+- RLHF 是 ChatGPT/InstructGPT 成功的关键技术
+- 常见挑战：奖励模型可能学会利用LLM的弱点而非真正提升质量
+
+---
+
+# 三、RAG（重点）
+
+## 1. RAG原理
+Retrieval-Augmented Generation
+
+流程：
+1. Query → Embedding
+2. 向量检索（Top-K）
+3. 拼接上下文
+4. LLM生成答案
+
+---
+
+## 2. RAG vs 微调
+
+RAG：
+- 动态更新知识
+- 无需训练
+
+微调：
+- 固化知识
+- 成本高
+
+---
+
+## 3. RAG常见问题
+
+- 幻觉（Hallucination）
+- 检索不准
+- 上下文过长
+
+优化方法：
+- chunk优化
+- rerank
+- hybrid search（BM25+向量）
+
+---
+
+# 四、向量数据库
+
+常见：
+- FAISS
+- Chroma
+- Milvus
+
+相似度：
+- Cosine
+- L2
+
+---
+
+# 五、Embedding
+
+作用：
+文本 → 向量
+
+模型：
+- text2vec
+- sentence-transformers
+
+---
+
+# 六、微调（Fine-tuning）
+
+## LoRA
+Low-Rank Adaptation
+
+核心：
+- 低秩矩阵分解
+- 减少参数更新
+
+优点：
+- 低成本
+- 快速训练
+
