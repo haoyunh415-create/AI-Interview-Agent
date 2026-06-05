@@ -1,0 +1,16 @@
+{
+  "name": "AI 面试助手",
+  "short_name": "面试助手",
+  "description": "智能面试练习、简历分析与 AI 对话",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0c12",
+  "theme_color": "#10a37f",
+  "orientation": "portrait",
+  "categories": ["education", "productivity"],
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "screenshots": []
+}

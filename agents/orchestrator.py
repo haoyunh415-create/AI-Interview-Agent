@@ -1,244 +1,299 @@
+"""Multi-agent interview orchestrator — coordinates all agents through the
+interview lifecycle via SharedMemory and MessageBus.
+"""
+
 import time
-from db.database import save
-from agents.resume_analyst import ResumeAnalyst
-from agents.interviewer import Interviewer, get_level_bias
-from agents.evaluator import Evaluator, MAX_FOLLOWUPS_PER_STAGE
+from typing import Any
+
+from agents.evaluator import PARSE_ERROR_KEY, Evaluator
+from agents.interviewer import Interviewer
 from agents.knowledge_retriever import KnowledgeRetriever
 from agents.report_writer import ReportWriter
+from agents.resume_analyst import ResumeAnalyst
+from core.constants import STAGES
 from core.logging_config import get_logger, log_duration
+from core.memory import MessageBus, SharedMemory
+from core.telemetry import TelemetryCollector
+from backend.db.database import save
 
-STAGES = ["基础", "原理", "进阶", "项目", "挑战"]
 _log = get_logger("orchestrator")
 
 
 class InterviewOrchestrator:
-    """Coordinates all agents through the interview lifecycle.
+    """Coordinates all agents through the interview lifecycle."""
 
-    Flow per stage:
-    1. Interviewer generates main question
-    2. User answers
-    3. Evaluator scores + decides if followup needed
-    4a. If followup needed → Interviewer generates followup (repeat up to 3x)
-    4b. If no followup → advance to next stage
-    5. After all stages → ReportWriter generates summary
-    """
-
-    def __init__(self, api_key=None):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> None:
         self.api_key = api_key
-        self.resume_analyst = ResumeAnalyst(api_key)
-        self.interviewer = Interviewer(api_key)
-        self.evaluator = Evaluator(api_key)
-        self.knowledge_retriever = KnowledgeRetriever(api_key)
-        self.report_writer = ReportWriter(api_key)
+        self._provider = provider
+        self._model = model
 
-        self._profile = None
-        self._context = ""
-        self._status = "idle"
-        self._followup_count = 0
+        self.shared_memory = SharedMemory()
+        self.message_bus = MessageBus(max_history=500)
+        self.telemetry = TelemetryCollector(max_traces=500)
 
-    # ── Agent status for UI ──
-    def agent_status(self):
-        """Return list of agent names and their states."""
+        self.resume_analyst = ResumeAnalyst(
+            api_key, self.shared_memory, self.message_bus, self.telemetry,
+            provider=provider, model=model,
+        )
+        self.interviewer = Interviewer(
+            api_key, self.shared_memory, self.message_bus, self.telemetry,
+            provider=provider, model=model,
+        )
+        self.evaluator = Evaluator(
+            api_key, self.shared_memory, self.message_bus, self.telemetry,
+            provider=provider, model=model,
+        )
+        self.report_writer = ReportWriter(
+            api_key, self.shared_memory, self.message_bus, self.telemetry,
+            provider=provider, model=model,
+        )
+        self.knowledge_retriever = KnowledgeRetriever(
+            api_key, self.shared_memory, self.message_bus, self.telemetry,
+            provider=provider, model=model,
+        )
+
+        self._setup_subscriptions()
+        self._status: str = "idle"
+        self._followup_count: int = 0
+        self._agent_log: list[dict[str, Any]] = []
+
+    def _setup_subscriptions(self) -> None:
+        self.message_bus.subscribe_all(self._on_any_event)
+
+    def _on_any_event(self, msg: Any) -> None:
+        self._agent_log.append({
+            "type": msg.type,
+            "source": msg.source,
+            "time": time.strftime("%H:%M:%S"),
+            "data_keys": list(msg.data.keys()),
+        })
+        if len(self._agent_log) > 200:
+            self._agent_log.pop(0)
+
+    def agent_status(self) -> list[tuple[str, str]]:
+        has_profile = self.shared_memory.get("resume.profile") is not None
         return [
-            ("简历分析师", "ready" if self._profile else "待分析"),
-            ("知识检索官", "ready" if self._context else "待检索"),
+            ("简历分析师", "ready" if has_profile else "待分析"),
             ("面试官", "ready" if self._status in ("questioning", "scored", "followup") else "等待中"),
             ("评价官", "ready" if self._status == "evaluating" else "等待中"),
             ("报告生成官", "ready" if self._status == "completed" else "等待中"),
         ]
 
-    @property
-    def followup_count(self):
-        return self._followup_count
-
-    # ── Resume analysis ──
-    def analyze_resume(self, resume_text):
+    def analyze_resume(self, resume_text: str) -> dict[str, Any] | None:
         if resume_text and resume_text.strip():
-            self._profile = self.resume_analyst.analyze(resume_text)
+            cached = self.shared_memory.get("resume.profile")
+            if cached is not None:
+                return cached
+            profile = self.resume_analyst.analyze(resume_text)
         else:
-            self._profile = None
-        return self._profile
+            profile = None
+            self.shared_memory.set("resume.profile", {"tech_stack": []}, "orchestrator")
+        return profile
 
-    # ── Knowledge retrieval ──
-    def fetch_context(self, topic):
-        self._context = self.knowledge_retriever.get_topic_context(topic)
-        return self._context
+    def retrieve_context(self, topic: str) -> str:
+        context = self.knowledge_retriever.retrieve(topic)
+        return context
 
-    # ── Question generation ──
-    def generate_question(self, topic, stage_idx, history=None, custom_questions=None):
-        """Generate the main question for a stage. Resets followup counter."""
+    def generate_question(
+        self,
+        topic: str,
+        stage_idx: int,
+        history: list[dict[str, str]] | None = None,
+        custom_questions: list[str] | None = None,
+    ) -> str:
         self._followup_count = 0
         stage = STAGES[stage_idx]
         self._status = "questioning"
-
-        question = self.interviewer.generate_question(
-            topic=topic,
-            stage=stage,
-            context=self._context,
-            history=history,
-            profile=self._profile,
-            custom_questions=custom_questions,
+        return self.interviewer.generate_question(
+            topic=topic, stage=stage, context="",
+            history=history, profile=None, custom_questions=custom_questions,
         )
-        return question
 
-    def generate_followup(self, original_question, answer, evaluation, stage_idx):
-        """Generate a follow-up question based on the previous answer."""
+    def generate_followup(
+        self,
+        original_question: str,
+        answer: str,
+        evaluation: dict[str, Any],
+        stage_idx: int,
+    ) -> str:
         stage = STAGES[stage_idx]
         self._status = "followup"
         self._followup_count += 1
-
-        question = self.interviewer.generate_followup(
+        return self.interviewer.generate_followup(
             original_question=original_question,
-            answer=answer,
-            evaluation=evaluation,
-            stage=stage,
+            answer=answer, evaluation=evaluation, stage=stage,
         )
-        return question
 
-    # ── Answer evaluation ──
-    def evaluate_answer(self, user, topic, question, answer, stage_idx):
-        """Evaluate answer and decide whether to follow up or move on."""
+    def evaluate_answer(
+        self,
+        user: str,
+        topic: str,
+        question: str,
+        answer: str,
+        stage_idx: int,
+        session_id: str | None = None,
+    ) -> tuple[dict[str, Any], str, bool]:
         stage = STAGES[stage_idx]
         self._status = "evaluating"
         t0 = time.monotonic()
 
-        score_json = self.evaluator.evaluate(
-            question, answer, stage, self._followup_count
-        )
-        save(user, topic, question, answer, score_json, stage)
+        try:
+            score_json = self.evaluator.evaluate(
+                question, answer, stage, self._followup_count, topic=topic,
+            )
+        except ValueError as e:
+            _log.error("evaluation failed: %s", e)
+            score_json = {
+                "correctness": 0, "logic": 0, "depth": 0, "expression": 0,
+                "summary": f"评分解析失败，请重试。错误: {e}",
+                "improvement": "LLM 输出格式异常，建议重新提交答案",
+                "needs_followup": False, "followup_reason": "",
+                PARSE_ERROR_KEY: True,
+            }
 
+        save(user, topic, question, answer, score_json, stage, session_id=session_id)
         needs_followup = self.evaluator.should_followup(score_json)
         log_duration(_log, f"evaluate stage={stage} followup={needs_followup}", t0)
-
         report = self.evaluator.format_report(score_json)
         self._status = "scored"
         return score_json, report, needs_followup
 
-    # ── Streaming question generation ──
-    def generate_question_stream(self, topic, stage_idx, history=None, custom_questions=None):
-        """Stream question generation. Resets followup counter."""
+    def evaluate_answer_stream(
+        self,
+        user: str, topic: str, question: str, answer: str,
+        stage_idx: int, session_id: str | None = None,
+    ):
+        stage = STAGES[stage_idx]
+        self._status = "evaluating"
+        t0 = time.monotonic()
+        try:
+            yield from self.evaluator.evaluate_stream(
+                question, answer, stage, self._followup_count, topic=topic,
+            )
+            score_json = self.shared_memory.get("eval.latest", {})
+        except ValueError as e:
+            _log.error("evaluation stream failed: %s", e)
+            score_json = {
+                "correctness": 0, "logic": 0, "depth": 0, "expression": 0,
+                "summary": f"评分解析失败，请重试。错误: {e}",
+                "improvement": "LLM 输出格式异常，建议重新提交答案",
+                "needs_followup": False, "followup_reason": "",
+                PARSE_ERROR_KEY: True,
+            }
+            self.shared_memory.set("eval.latest", score_json, "orchestrator")
+        save(user, topic, question, answer, score_json, stage, session_id=session_id)
+        log_duration(_log, f"evaluate_stream stage={stage}", t0)
+        self._status = "scored"
+
+    def generate_question_stream(
+        self, topic: str, stage_idx: int, history: list[dict[str, str]] | None = None,
+        custom_questions: list[str] | None = None,
+    ):
         self._followup_count = 0
         stage = STAGES[stage_idx]
         self._status = "questioning"
         yield from self.interviewer.generate_question_stream(
-            topic=topic,
-            stage=stage,
-            context=self._context,
-            history=history,
-            profile=self._profile,
-            custom_questions=custom_questions,
+            topic=topic, stage=stage, context="",
+            history=history, profile=None, custom_questions=custom_questions,
         )
 
-    def generate_followup_stream(self, original_question, answer, evaluation, stage_idx):
-        """Stream follow-up question generation."""
+    def generate_followup_stream(
+        self, original_question: str, answer: str,
+        evaluation: dict[str, Any], stage_idx: int,
+    ):
         stage = STAGES[stage_idx]
         self._status = "followup"
         self._followup_count += 1
         yield from self.interviewer.generate_followup_stream(
-            original_question=original_question,
-            answer=answer,
-            evaluation=evaluation,
-            stage=stage,
+            original_question=original_question, answer=answer,
+            evaluation=evaluation, stage=stage,
         )
 
-    # ── Hint generation ──
-    def generate_hint(self, question):
+    def generate_hint(self, question: str) -> str:
         return self.interviewer.generate_hint(question)
 
-    def generate_hint_stream(self, question):
+    def generate_hint_stream(self, question: str):
         yield from self.interviewer.generate_hint_stream(question)
 
-    # ── Final report ──
-    def generate_report(self, questions, answers, scores):
+    def generate_report(
+        self, questions: list[str], answers: list[str], scores: list[str],
+    ) -> str:
         self._status = "reporting"
         report = self.report_writer.generate_summary(
-            questions, answers, scores, self._profile
+            questions, answers, scores, profile=None,
         )
         self._status = "completed"
         return report
 
-    # ── Convenience: full step (backward compat) ──
-    def step(
-        self,
-        user,
-        topic,
-        stage_idx,
-        question=None,
-        answer=None,
-        history=None,
-        resume=None,
-        custom_questions=None,
-    ):
-        """Single step interface. Returns a dict with interview state.
+    def get_agent_log(self, limit: int = 20) -> list[dict[str, Any]]:
+        return self._agent_log[-limit:]
 
-        Dict keys when answer is None (starting):
-            {"question": str, "stage_idx": int, "is_followup": False}
+    def persist_memory(self, session_id: int) -> None:
+        from backend.db.database import save_memory_data
+        try:
+            save_memory_data(session_id, self.shared_memory.to_dict())
+        except Exception as exc:
+            _log.warning("memory persist failed: %s", exc)
 
-        Dict keys when answer is given:
-            {"report": str, "next_q": str, "next_idx": int,
-             "is_followup": bool, "stage_completed": bool,
-             "all_completed": bool, "score_json": dict}
-        """
-        if resume:
-            self.analyze_resume(resume)
-        if not self._context:
-            self.fetch_context(topic)
+    def load_memory(self, session_id: int) -> None:
+        from backend.db.database import load_memory_data
+        try:
+            data = load_memory_data(session_id)
+            if data:
+                self.shared_memory.load_dict(data)
+        except Exception as exc:
+            _log.warning("memory load failed: %s", exc)
 
-        if answer is None:
-            q = self.generate_question(topic, stage_idx, history, custom_questions)
-            return {
-                "question": q,
-                "stage_idx": stage_idx,
-                "is_followup": False,
-            }
+    def get_shared_memory_snapshot(self) -> dict[str, Any]:
+        snap: dict[str, Any] = {}
+        for key in self.shared_memory.keys():
+            entry = self.shared_memory.get_entry(key)
+            if entry is None:
+                continue
+            val = entry.value
+            if isinstance(val, str):
+                snap[key] = val[:100] + ("..." if len(val) > 100 else "")
+            elif isinstance(val, list):
+                snap[key] = f"[{', '.join(str(v)[:40] for v in val[:5])}{'...' if len(val) > 5 else ''}]"
+            elif isinstance(val, dict):
+                snap[key] = f"{{{', '.join(f'{k}: {v}' for k, v in list(val.items())[:5])}}}"
+            else:
+                snap[key] = str(val)
+        return snap
 
-        score_json, report, needs_followup = self.evaluate_answer(
-            user, topic, question, answer, stage_idx
-        )
+    def save_interview_report(
+        self, session_id: str, user: str, topic: str,
+        history: list[dict[str, str]],
+    ) -> str | None:
+        if not history:
+            return None
+        from backend.db.database import save_report as _save_report
+        ai_summary = None
+        try:
+            questions = [h["q"] for h in history]
+            answers = [h["a"] for h in history]
+            scores = [h.get("score", "") for h in history]
+            ai_summary = self.generate_report(questions, answers, scores)
+        except Exception as exc:
+            _log.warning("AI summary failed for session %s: %s", session_id, exc)
+        try:
+            _save_report(session_id, user, topic, ai_summary or "")
+        except Exception as exc:
+            _log.warning("failed to save report: %s", exc)
+            return None
+        return ai_summary
 
-        if needs_followup and self._followup_count < MAX_FOLLOWUPS_PER_STAGE:
-            followup_q = self.generate_followup(
-                question, answer, score_json, stage_idx
-            )
-            return {
-                "report": report,
-                "next_q": followup_q,
-                "next_idx": stage_idx,  # stay in same stage
-                "is_followup": True,
-                "stage_completed": False,
-                "all_completed": False,
-                "score_json": score_json,
-            }
-
-        # Move to next stage
-        next_idx = min(stage_idx + 1, len(STAGES) - 1)
-        all_completed = stage_idx >= len(STAGES) - 1
-
-        if all_completed:
-            return {
-                "report": report,
-                "next_q": None,
-                "next_idx": next_idx,
-                "is_followup": False,
-                "stage_completed": True,
-                "all_completed": True,
-                "score_json": score_json,
-            }
-
-        next_q = self.generate_question(topic, next_idx, history, custom_questions)
-        return {
-            "report": report,
-            "next_q": next_q,
-            "next_idx": next_idx,
-            "is_followup": False,
-            "stage_completed": True,
-            "all_completed": False,
-            "score_json": score_json,
-        }
-
-    def reset(self):
-        """Reset orchestrator state for a new interview."""
-        self._profile = None
-        self._context = ""
+    def reset(self) -> None:
+        self.shared_memory.clear()
+        self.message_bus = MessageBus(max_history=500)
+        self.telemetry = TelemetryCollector(max_traces=500)
+        self._setup_subscriptions()
+        self._agent_log.clear()
         self._status = "idle"
         self._followup_count = 0
+        _log.info("orchestrator reset — memory, bus & telemetry cleared")

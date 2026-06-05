@@ -1,0 +1,17 @@
+# ── Tech Chat — Development Override ──
+# Overrides docker-compose.yml for HTTP-only local development.
+# Usage:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+services:
+  nginx:
+    # Use HTTP-only config for development (no TLS needed)
+    volumes:
+      - ./nginx.dev.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/out:/usr/share/nginx/html:ro  # mount local build
+    ports:
+      - "80:80"
+      # No 443 in dev
+
+  frontend-builder:
+    # Disable builder in dev — use local npm run dev instead
+    profiles: ["disabled"]

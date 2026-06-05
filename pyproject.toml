@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "tech-chat"
+version = "2.2.0"
+description = "AI面试助手 — 多智能体驱动的模拟面试、简历分析和 AI 聊天平台"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["interview", "ai", "deepseek", "langchain"]
+
+dependencies = [
+    "langchain>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+    "PyMuPDF>=1.23.0",
+    "reportlab>=4.0",
+    "python-dotenv>=1.0.0",
+    "cachetools>=5.3.0",
+    "python-jose[cryptography]>=3.3.0",
+    "slowapi>=0.1.9",
+    "bcrypt>=4.0.0",
+    "sentry-sdk>=2.0.0",
+    "alembic>=1.13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.9.0",
+    "pytest>=8.0",
+    "pytest-mock>=3.14",
+]
+# PostgreSQL support (optional — only needed when DB_URL is postgresql://)
+postgres = [
+    "psycopg2-binary>=2.9.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "YTT", # flake8-2020
+    "RUF", # ruff-specific
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "TID", # flake8-tidy-imports
+]
+ignore = [
+    "E501",    # line too long — handled by formatter
+    "N802",    # allow lowercase function names with underscores
+    "N803",    # allow lowercase argument names
+    "N806",    # allow lowercase variable names
+    "N815",    # allow mixed-case variables for langchain compat
+    "SIM108",  # allow if-else instead of ternary
+    "RUF012",  # allow mutable class vars
+    "RUF001",  # allow Chinese/unicode in strings (intentional)
+    "RUF002",  # allow Chinese/unicode in docstrings (intentional)
+    "RUF003",  # allow Chinese/unicode in comments (intentional)
+    "B008",    # fastapi Depends() pattern — false positive
+    "B904",    # raise from within except — handled where needed
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

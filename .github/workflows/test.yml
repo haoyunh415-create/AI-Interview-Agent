@@ -1,0 +1,58 @@
+name: Python CI
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - "frontend/**"
+      - "docs/**"
+      - "README.md"
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint with ruff
+        run: ruff check --output-format=github .
+
+      - name: Check formatting with ruff
+        run: ruff format --check --diff .
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-mock httpx
+          pip install langchain-anthropic langchain-ollama
+
+      - name: Run tests
+        run: |
+          python -m pytest tests/ -v --tb=short

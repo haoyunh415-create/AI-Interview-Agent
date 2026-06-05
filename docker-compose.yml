@@ -1,0 +1,77 @@
+# ── AI Interview Copilot — Docker Compose ──
+#
+# Production mode (TLS):
+#   bash scripts/gen-certs.sh   (or pwsh scripts/gen-certs.ps1)
+#   docker compose up -d
+#
+# Development mode (HTTP only):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Start only backend:
+#   docker compose up -d backend
+
+services:
+  # ── Nginx (unified entry point) ──
+  nginx:
+    image: nginx:stable-alpine
+    container_name: tech-chat-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - frontend_build:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+      - frontend-builder
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Frontend builder (produces static output) ──
+  frontend-builder:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
+    container_name: tech-chat-builder
+    volumes:
+      - frontend_build:/build/out
+    # Exit after build — the output is served by nginx
+
+  # ── Backend (FastAPI) ──
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: tech-chat-backend
+    expose:
+      - "8765"
+    env_file:
+      - .env
+    environment:
+      - DATA_DIR=/app/data
+      - LOG_LEVEL=INFO
+    volumes:
+      - app_data:/app/data
+      - outputs_data:/app/outputs/reports
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  frontend_build:
+    name: tech-chat-frontend
+  app_data:
+    name: tech-chat-data
+  outputs_data:
+    name: tech-chat-outputs

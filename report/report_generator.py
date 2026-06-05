@@ -1,10 +1,11 @@
 import os
 import platform
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.pagesizes import A4
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 _FONT_PATHS = {
     "Windows": ["C:/Windows/Fonts/simhei.ttf", "C:/Windows/Fonts/msyh.ttc"],
@@ -20,7 +21,7 @@ _FONT_PATHS = {
 }
 
 CHINESE_FONT = "Helvetica"
-_font_paths = _FONT_PATHS.get(platform.system(), []) + [os.path.join(os.path.dirname(__file__), "..", "fonts", "SimHei.ttf")]
+_font_paths = [*_FONT_PATHS.get(platform.system(), []), os.path.join(os.path.dirname(__file__), "..", "fonts", "SimHei.ttf")]
 
 for fp in _font_paths:
     if os.path.isfile(fp):
@@ -40,7 +41,7 @@ def generate_pdf(data, filename="outputs/reports/interview_report.pdf"):
 
     doc = SimpleDocTemplate(filename, pagesize=A4)
     styles = getSampleStyleSheet()
-    
+
     # 3. 自定义中文样式
     custom_style = ParagraphStyle(
         'ChineseStyle',
@@ -50,7 +51,7 @@ def generate_pdf(data, filename="outputs/reports/interview_report.pdf"):
         leading=15, # 行间距
         wordWrap='CJK', # 允许中文字符换行
     )
-    
+
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Title'],
@@ -61,19 +62,17 @@ def generate_pdf(data, filename="outputs/reports/interview_report.pdf"):
     )
 
     content = []
-    
+
     # 添加标题
     content.append(Paragraph("AI 面试评估报告", title_style))
     content.append(Spacer(1, 12))
 
-    # 4. 遍历数据
-    # 假设 data 是从数据库取出的列表，每一行是一个元组或字典
+    # 4. 遍历数据 — data rows are sqlite3.Row objects, access by column name
     for i, row in enumerate(data):
-        # 这里的 row 处理取决于你数据库 load_user 返回的格式
-        text = f"<b>问题 {i+1}:</b> {row[3]}<br/>" \
-               f"<b>回答:</b> {row[4]}<br/>" \
-               f"<b>AI 评分:</b><br/>{row[5]}<p/>"
-        
+        text = f"<b>问题 {i+1}:</b> {row['question']}<br/>" \
+               f"<b>回答:</b> {row['answer']}<br/>" \
+               f"<b>AI 评分:</b><br/>{row['score']}<p/>"
+
         content.append(Paragraph(text, custom_style))
         content.append(Spacer(1, 10))
         content.append(Paragraph("-" * 80, custom_style)) # 分隔线

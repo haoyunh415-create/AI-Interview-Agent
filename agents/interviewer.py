@@ -1,79 +1,119 @@
+"""Interviewer agent — generates interview questions.
+
+Now reads candidate profile and knowledge context from SharedMemory (published
+by ResumeAnalyst and KnowledgeRetriever), and publishes generated questions
+to the message bus for traceability.
+"""
+
+from collections.abc import Iterator
+from typing import Any
+
 from agents.base import BaseAgent
-
-INTERVIEWER_ROLE = """你是一位资深的技术面试官（Interviewer Agent）。
-你的职责是根据候选人的背景和当前面试阶段，提出精准、有深度的技术问题。
-
-要求：
-1. 每次只提一个问题
-2. 问题要有层次感，能考察真实理解能力
-3. 根据候选人级别调整难度
-4. 避免重复之前问过的问题
-5. 语气专业但不失亲和力"""
+from core.memory import Events
+from core.prompts import (
+    INTERVIEWER_FOLLOWUP_TEMPLATE,
+    INTERVIEWER_HINT_TEMPLATE,
+    INTERVIEWER_LEVEL_BIASES,
+    INTERVIEWER_QUESTION_TEMPLATE,
+    INTERVIEWER_ROLE,
+)
 
 
-def get_level_bias(profile):
-    """Return difficulty adjustment based on candidate level. Standalone function."""
+def get_level_bias(profile: dict[str, Any] | None) -> str:
+    """Return difficulty adjustment based on candidate level."""
     if not profile:
         return ""
     level = profile.get("level", "中级")
-    biases = {
-        "初级": "问题偏向基础概念，多给提示，鼓励为主",
-        "中级": "基础与进阶结合，适当追问细节",
-        "高级": "深入原理和架构设计，考察系统思维",
-        "专家": "挑战前沿技术和创新方案，考察行业视野",
-    }
-    return biases.get(level, biases["中级"])
+    return INTERVIEWER_LEVEL_BIASES.get(level, INTERVIEWER_LEVEL_BIASES["中级"])
 
 
 class Interviewer(BaseAgent):
     """Generates interview questions based on topic, stage, and candidate profile."""
 
-    def __init__(self, api_key=None):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        shared_memory: Any = None,
+        message_bus: Any = None,
+        telemetry: Any = None,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> None:
         super().__init__(
             name="interviewer",
             role=INTERVIEWER_ROLE,
             temperature=0.8,
             api_key=api_key,
+            shared_memory=shared_memory,
+            message_bus=message_bus,
+            telemetry=telemetry,
+            provider=provider,
+            model=model,
         )
+
+    def _resolve_profile(self, profile: dict[str, Any] | None) -> dict[str, Any] | None:
+        if profile is not None:
+            return profile
+        return self.memory_get("resume.profile", None)
+
+    def _resolve_context(self, topic: str, context: str = "") -> str:
+        if context:
+            return context
+        return self.memory_get(f"context.{topic}", "")
 
     def generate_question(
         self,
-        topic,
-        stage,
-        context="",
-        history=None,
-        profile=None,
-        custom_questions=None,
-    ):
-        """Generate a single interview question."""
+        topic: str,
+        stage: str,
+        context: str = "",
+        history: list[dict[str, str]] | None = None,
+        profile: dict[str, Any] | None = None,
+        custom_questions: list[str] | None = None,
+    ) -> str:
         if custom_questions and history:
             idx = len(history)
             if idx < len(custom_questions):
                 return custom_questions[idx]
 
-        prompt = self._build_question_prompt(topic, stage, context, history, profile)
-        return self.invoke(prompt)
+        resolved_profile = self._resolve_profile(profile)
+        resolved_context = self._resolve_context(topic, context)
+        prompt = self._build_question_prompt(
+            topic, stage, resolved_context, history, resolved_profile,
+        )
+        question = self.invoke(prompt)
+        self._publish_question(question, stage, is_followup=False)
+        return question
 
     def generate_question_stream(
         self,
-        topic,
-        stage,
-        context="",
-        history=None,
-        profile=None,
-        custom_questions=None,
-    ):
-        """Streaming variant: yield question tokens."""
+        topic: str,
+        stage: str,
+        context: str = "",
+        history: list[dict[str, str]] | None = None,
+        profile: dict[str, Any] | None = None,
+        custom_questions: list[str] | None = None,
+    ) -> Iterator[str]:
         if custom_questions and history:
             idx = len(history)
             if idx < len(custom_questions):
                 yield custom_questions[idx]
                 return
 
-        prompt = self._build_question_prompt(topic, stage, context, history, profile)
+        resolved_profile = self._resolve_profile(profile)
+        resolved_context = self._resolve_context(topic, context)
+        prompt = self._build_question_prompt(
+            topic, stage, resolved_context, history, resolved_profile,
+        )
         yield from self.invoke_stream(prompt)
 
-    def _build_question_prompt(self, topic, stage, context, history, profile):
+    def _build_question_prompt(
+        self,
+        topic: str,
+        stage: str,
+        context: str,
+        history: list[dict[str, str]] | None,
+        profile: dict[str, Any] | None,
+    ) -> str:
         history_context = ""
         if history:
             history_context = "\n已问过的问题：\n" + "\n".join(
@@ -91,61 +131,90 @@ class Interviewer(BaseAgent):
             )
             level_bias = get_level_bias(profile)
 
-        return (
-            f"当前主题：{topic}\n"
-            f"当前阶段：{stage}\n"
-            f"参考知识：{context}\n"
-            f"{history_context}\n"
-            f"{profile_context}\n"
-            f"难度建议：{level_bias}\n\n"
-            "要求：\n"
-            "1. 根据当前阶段和已问过的问题，提出【一个】新的技术面试题\n"
-            "2. 禁止重复类似的问题\n"
-            "3. 题目要具体且有深度，能考察真实理解能力\n"
-            "4. 如果候选人有简历信息，针对其技术栈和项目出题\n"
-            "5. 语气专业自然\n\n"
-            "直接输出问题：\n"
+        keyword_context = self._build_keyword_context(profile)
+
+        return INTERVIEWER_QUESTION_TEMPLATE.format(
+            topic=topic,
+            stage=stage,
+            context=context,
+            history_context=history_context,
+            profile_context=profile_context,
+            keyword_context=keyword_context,
+            level_bias=level_bias,
         )
 
-    def generate_followup(self, original_question, answer, evaluation, stage):
-        prompt = self._build_followup_prompt(original_question, answer, evaluation, stage)
-        return self.invoke(prompt, temperature=0.6)
+    def _build_keyword_context(self, profile: dict[str, Any] | None) -> str:
+        keywords = self.memory_get("resume.keywords", None)
+        if not keywords:
+            return ""
+        terms = []
+        for kw in keywords[:6]:
+            term = kw.get("term", "")
+            weight = kw.get("weight", 0.5)
+            if term:
+                label = "核心" if weight >= 0.7 else "补充"
+                terms.append(f"  - {term} [{label}]")
+        if not terms:
+            return ""
+        return (
+            "\n候选人核心技术关键词（优先考察高权重的关键词）：\n"
+            + "\n".join(terms)
+        )
 
-    def generate_followup_stream(self, original_question, answer, evaluation, stage):
+    def generate_followup(
+        self,
+        original_question: str,
+        answer: str,
+        evaluation: dict[str, Any],
+        stage: str,
+    ) -> str:
+        prompt = self._build_followup_prompt(original_question, answer, evaluation, stage)
+        question = self.invoke(prompt, temperature=0.6)
+        self._publish_question(question, stage, is_followup=True)
+        return question
+
+    def generate_followup_stream(
+        self,
+        original_question: str,
+        answer: str,
+        evaluation: dict[str, Any],
+        stage: str,
+    ) -> Iterator[str]:
         prompt = self._build_followup_prompt(original_question, answer, evaluation, stage)
         yield from self.invoke_stream(prompt, temperature=0.6)
 
-    def _build_followup_prompt(self, original_question, answer, evaluation, stage):
+    def _build_followup_prompt(
+        self,
+        original_question: str,
+        answer: str,
+        evaluation: dict[str, Any],
+        stage: str,
+    ) -> str:
         followup_reason = evaluation.get("followup_reason", "回答不够深入")
         weakness_summary = evaluation.get("summary", "")
-
-        return (
-            "你是一位技术面试官，需要对候选人的回答进行追问。\n\n"
-            f"原问题：{original_question}\n"
-            f"候选人回答：{answer}\n"
-            f"评价：{weakness_summary}\n"
-            f"追问原因：{followup_reason}\n"
-            f"当前阶段：{stage}\n\n"
-            "要求：\n"
-            "1. 基于候选人的回答的不足之处，提出一个追问\n"
-            "2. 追问不是新题目，而是引导候选人补充、深入或纠正之前的回答\n"
-            "3. 追问要具体，指向回答中的薄弱点\n"
-            "4. 语气为引导式，可以说'你刚才提到X，能否具体讲讲Y？'\n"
-            "5. 不要重复原问题\n\n"
-            "直接输出追问问题：\n"
+        return INTERVIEWER_FOLLOWUP_TEMPLATE.format(
+            original_question=original_question,
+            answer=answer,
+            weakness_summary=weakness_summary,
+            followup_reason=followup_reason,
+            stage=stage,
         )
 
-    def generate_hint(self, question):
+    def generate_hint(self, question: str) -> str:
         prompt = self._build_hint_prompt(question)
         return self.invoke(prompt, temperature=0.3)
 
-    def generate_hint_stream(self, question):
+    def generate_hint_stream(self, question: str) -> Iterator[str]:
         prompt = self._build_hint_prompt(question)
         yield from self.invoke_stream(prompt, temperature=0.3)
 
-    def _build_hint_prompt(self, question):
-        return (
-            "基于这个问题，给考生一个简短的提示（10字以内），帮助他们理清答题方向。\n"
-            f"问题：{question}\n"
-            "只输出一个简洁的提示，不要多余内容：\n"
-        )
+    def _build_hint_prompt(self, question: str) -> str:
+        return INTERVIEWER_HINT_TEMPLATE.format(question=question)
+
+    def _publish_question(self, question: str, stage: str, is_followup: bool) -> None:
+        event_type = Events.FOLLOWUP_GENERATED if is_followup else Events.QUESTION_GENERATED
+        self.publish_event(event_type, {
+            "question": question,
+            "stage": stage,
+            "is_followup": is_followup,
+        })
