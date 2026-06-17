@@ -34,14 +34,17 @@ class JsonFormatter(logging.Formatter):
     """JSON log formatter for production (log aggregation systems)."""
 
     def format(self, record: logging.LogRecord) -> str:
-        return json.dumps({
-            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-            "module": record.module,
-            "line": record.lineno,
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+                "module": record.module,
+                "line": record.lineno,
+            },
+            ensure_ascii=False,
+        )
 
 
 def setup_logging(level: int | None = None) -> logging.Logger:

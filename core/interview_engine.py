@@ -4,11 +4,11 @@ All public functions preserve their original signatures so existing callers
 (app.py) work with minimal changes.
 """
 
-import json
 import time
-from agents.orchestrator import InterviewOrchestrator, STAGES
-from agents.interviewer import Interviewer, get_level_bias
-from agents.evaluator import Evaluator, MAX_FOLLOWUPS_PER_STAGE
+
+from agents.evaluator import Evaluator
+from agents.interviewer import Interviewer
+from agents.orchestrator import InterviewOrchestrator
 from agents.report_writer import ReportWriter
 from core.logging_config import get_logger, log_duration
 
@@ -17,7 +17,13 @@ _log = get_logger("interview")
 # Re-exported constants
 
 TOPICS = {
-    "Transformer核心原理": ["self-attention", "multi-head", "encoder-decoder", "positional encoding", "transformer架构"],
+    "Transformer核心原理": [
+        "self-attention",
+        "multi-head",
+        "encoder-decoder",
+        "positional encoding",
+        "transformer架构",
+    ],
     "RAG检索增强生成": ["retrieval", "vector database", "chunk", "embedding", "rag架构", "rag优化"],
     "模型微调技术": ["lora", "fine-tuning", "prefix-tuning", "adapter", "参数高效微调"],
     "大模型综合评估": ["llm评估", "benchmark", "幻觉", "rlhf", "模型压缩", "推理优化"],
@@ -65,6 +71,7 @@ def reset_orchestrator():
 
 
 # ── Public API ──
+
 
 def get_topic_keywords(topic):
     return TOPICS.get(topic, [])
@@ -123,8 +130,18 @@ def generate_summary_stream(questions, answers, scores, profile=None, api_key=No
     yield from writer.generate_summary_stream(questions, answers, scores, profile)
 
 
-def step(user, topic, context, idx, question=None, answer=None, history=None,
-         resume=None, custom_questions=None, api_key=None):
+def step(
+    user,
+    topic,
+    context,
+    idx,
+    question=None,
+    answer=None,
+    history=None,
+    resume=None,
+    custom_questions=None,
+    api_key=None,
+):
     """Run one step of the interview. Returns a dict with full state."""
     orch = _get_orchestrator(api_key)
     t0 = time.monotonic()

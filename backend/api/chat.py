@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -90,8 +89,11 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     try:
         reply = await asyncio.to_thread(
             _get_llm_and_reply,
-            req.api_key, req.message, req.history,
-            req.provider, req.model,
+            req.api_key,
+            req.message,
+            req.history,
+            req.provider,
+            req.model,
         )
         return ChatResponse(reply=reply)
     except Exception as e:
@@ -127,7 +129,7 @@ async def chat_stream(req: ChatRequest, request: Request):
             for chunk in llm.stream(safe_messages):
                 if chunk.content:
                     yield f"data: {json.dumps({'type': 'token', 'content': chunk.content}, ensure_ascii=False)}\n\n"
-            yield "data: {\"type\": \"done\"}\n\n"
+            yield 'data: {"type": "done"}\n\n'
         except Exception as exc:
             yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
 
@@ -161,8 +163,11 @@ async def chat_with_session(
     try:
         reply = await asyncio.to_thread(
             _get_llm_and_reply,
-            creds["api_key"], req.message, req.history,
-            creds.get("provider"), creds.get("model"),
+            creds["api_key"],
+            req.message,
+            req.history,
+            creds.get("provider"),
+            creds.get("model"),
         )
         return ChatResponse(reply=reply)
     except Exception as e:

@@ -3,14 +3,17 @@ from html import escape
 
 import streamlit as st
 from dotenv import load_dotenv
-from core.config import RETRIEVAL_SCORE_THRESHOLD
-from core.rag_engine import retrieve_with_metadata, rag_query_stream
-from core.interview_engine import (
-    STAGES, get_topic_keywords,
-    generate_custom_questions_stream,
-    get_hints_stream, generate_summary_stream, _get_orchestrator,
-)
+
 from agents.evaluator import MAX_FOLLOWUPS_PER_STAGE
+from core.interview_engine import (
+    STAGES,
+    _get_orchestrator,
+    generate_custom_questions_stream,
+    generate_summary_stream,
+    get_hints_stream,
+    get_topic_keywords,
+)
+from core.rag_engine import rag_query_stream, retrieve_with_metadata
 from db.database import init_db, load_user
 from report.report_generator import generate_pdf
 
@@ -26,7 +29,8 @@ st.set_page_config(
 )
 
 # ── Custom CSS ──
-st.markdown("""
+st.markdown(
+    """
 <style>
 :root {
     --bg: #0c111d;
@@ -233,15 +237,17 @@ hr {
     .question-card { padding: 1rem; }
 }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ── Title ──
 st.markdown('<div class="main-header">AI Interview Copilot</div>', unsafe_allow_html=True)
 st.markdown(
     '<p class="subtitle">'
-    'Focused interview practice, knowledge retrieval, and progress reporting with '
+    "Focused interview practice, knowledge retrieval, and progress reporting with "
     '<a href="https://platform.deepseek.com/" target="_blank" style="color:#38bdf8">DeepSeek</a>'
-    '</p>',
+    "</p>",
     unsafe_allow_html=True,
 )
 
@@ -299,6 +305,7 @@ with st.sidebar:
 
     with st.expander("Agent Status", expanded=False):
         from core.interview_engine import _get_orchestrator
+
         orch = _get_orchestrator(api_key if api_key else None)
         if resume_content or resume_manual:
             orch.analyze_resume(full_resume)
@@ -311,6 +318,7 @@ with st.sidebar:
 
     if st.button("Reset Progress", use_container_width=True):
         from core.interview_engine import reset_orchestrator
+
         reset_orchestrator()
         for key in ["current_q", "stage_index", "last_score", "history", "show_hint", "is_followup", "followup_count"]:
             if key in st.session_state:
@@ -321,8 +329,8 @@ with st.sidebar:
 
     st.markdown(
         '<p style="color:#475569;font-size:0.75rem;text-align:center;">'
-        'Built with Streamlit + DeepSeek + ChromaDB<br>'
-        '</p>',
+        "Built with Streamlit + DeepSeek + ChromaDB<br>"
+        "</p>",
         unsafe_allow_html=True,
     )
 
@@ -408,7 +416,8 @@ if mode == "AI Interview":
                         stream = generate_custom_questions_stream(custom_job_desc, api_key)
                         full_response = st.write_stream(stream)
                     questions = [
-                        q.strip() for q in full_response.split("\n")
+                        q.strip()
+                        for q in full_response.split("\n")
                         if q.strip() and (q[0].isdigit() or q.startswith("-") or q.startswith("*"))
                     ]
                     if not questions:
@@ -418,21 +427,34 @@ if mode == "AI Interview":
                 if "custom_questions" in st.session_state and st.session_state.custom_questions:
                     with st.expander("Generated Questions"):
                         for i, q in enumerate(st.session_state.custom_questions):
-                            st.write(f"**{i+1}.** {q}")
+                            st.write(f"**{i + 1}.** {q}")
 
         # ── Keywords ──
         keywords = get_topic_keywords(internal_topic)
         with st.expander("Knowledge Points"):
-            st.markdown(" ".join([f'<code style="background:rgba(56,189,248,0.12);color:#bae6fd;padding:0.22rem 0.55rem;border-radius:6px;margin:0.18rem;display:inline-block;">{_html(k)}</code>' for k in keywords]) or "No keywords configured.", unsafe_allow_html=True)
+            st.markdown(
+                " ".join(
+                    [
+                        f'<code style="background:rgba(56,189,248,0.12);color:#bae6fd;padding:0.22rem 0.55rem;border-radius:6px;margin:0.18rem;display:inline-block;">{_html(k)}</code>'
+                        for k in keywords
+                    ]
+                )
+                or "No keywords configured.",
+                unsafe_allow_html=True,
+            )
 
         # ── Progress ──
         col_a, col_b, col_c = st.columns([2, 1, 1])
         with col_a:
-            followup_tag = f" <span style='color:#f59e0b;font-size:0.85rem;'>(追问中)</span>" if st.session_state.is_followup else ""
+            followup_tag = (
+                " <span style='color:#f59e0b;font-size:0.85rem;'>(追问中)</span>"
+                if st.session_state.is_followup
+                else ""
+            )
             st.markdown(
                 f'<p style="font-size:1.05rem;color:#e5e7eb;">'
-                f'Stage {st.session_state.stage_index + 1}/{len(STAGES)}: '
-                f'<strong>{_html(STAGES[st.session_state.stage_index])}</strong>{followup_tag}</p>',
+                f"Stage {st.session_state.stage_index + 1}/{len(STAGES)}: "
+                f"<strong>{_html(STAGES[st.session_state.stage_index])}</strong>{followup_tag}</p>",
                 unsafe_allow_html=True,
             )
         with col_b:
@@ -456,7 +478,8 @@ if mode == "AI Interview":
                             st.stop()
                     custom_qs = st.session_state.get("custom_questions", None)
                     stream = orch.generate_question_stream(
-                        internal_topic, st.session_state.stage_index,
+                        internal_topic,
+                        st.session_state.stage_index,
                         history=st.session_state.history,
                         custom_questions=custom_qs,
                     )
@@ -467,17 +490,21 @@ if mode == "AI Interview":
         else:
             # ── Question card ──
             label = "Follow-up Question" if st.session_state.is_followup else "Interviewer Asks"
-            card_class = "question-card" if not st.session_state.is_followup else "question-card"
+            card_class = "question-card"
             followup_style = (
-                'border-color:rgba(245,158,11,0.5);border-left:3px solid #f59e0b;'
-                if st.session_state.is_followup else ''
+                "border-color:rgba(245,158,11,0.5);border-left:3px solid #f59e0b;"
+                if st.session_state.is_followup
+                else ""
             )
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div class="{card_class}" style="{followup_style}">
                 <div class="label">{label}</div>
                 <div class="text">{_html(st.session_state.current_q)}</div>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
             col_h1, col_h2, _ = st.columns([1, 1, 3])
             with col_h1:
@@ -497,7 +524,12 @@ if mode == "AI Interview":
 
             # ── Answer form ──
             with st.form(key="ans_form", clear_on_submit=True):
-                answer = st.text_area("Your answer:", height=180, placeholder="Type your detailed response here...", label_visibility="collapsed")
+                answer = st.text_area(
+                    "Your answer:",
+                    height=180,
+                    placeholder="Type your detailed response here...",
+                    label_visibility="collapsed",
+                )
                 btn_label = "Submit Follow-up" if st.session_state.is_followup else "Submit & Next"
                 submit = st.form_submit_button(btn_label, type="primary")
 
@@ -515,8 +547,10 @@ if mode == "AI Interview":
 
                     with st.spinner("AI evaluating your answer..."):
                         score_json, report, needs_followup = orch.evaluate_answer(
-                            user, internal_topic,
-                            st.session_state.current_q, answer,
+                            user,
+                            internal_topic,
+                            st.session_state.current_q,
+                            answer,
                             st.session_state.stage_index,
                         )
 
@@ -526,7 +560,9 @@ if mode == "AI Interview":
 
                     if needs_followup and orch.followup_count < MAX_FOLLOWUPS_PER_STAGE:
                         stream = orch.generate_followup_stream(
-                            st.session_state.current_q, answer, score_json,
+                            st.session_state.current_q,
+                            answer,
+                            score_json,
                             st.session_state.stage_index,
                         )
                         st.session_state.current_q = st.write_stream(stream)
@@ -538,7 +574,9 @@ if mode == "AI Interview":
                     else:
                         next_idx = st.session_state.stage_index + 1
                         stream = orch.generate_question_stream(
-                            internal_topic, next_idx, st.session_state.history,
+                            internal_topic,
+                            next_idx,
+                            st.session_state.history,
                             custom_questions=st.session_state.get("custom_questions"),
                         )
                         st.session_state.current_q = st.write_stream(stream)
@@ -557,7 +595,7 @@ if mode == "AI Interview":
             # ── History ──
             with st.expander(f"Interview Progress ({len(st.session_state.history)} answered)"):
                 for i, h in enumerate(st.session_state.history):
-                    st.markdown(f"**Q{i+1}:** {h['q']}")
+                    st.markdown(f"**Q{i + 1}:** {h['q']}")
                     preview = h["a"][:120] + "..." if len(h["a"]) > 120 else h["a"]
                     st.caption(f"A: {preview}")
                     st.markdown("---")
@@ -587,10 +625,9 @@ elif mode == "Report":
             st.caption(f"Last saved: {stats['last_time']}")
 
         if api_key:
-            with st.expander("AI Summary", expanded=True):
-                with st.spinner(""):
-                    stream = generate_summary_stream(questions, answers, scores, api_key=api_key)
-                    st.write_stream(stream)
+            with st.expander("AI Summary", expanded=True), st.spinner(""):
+                stream = generate_summary_stream(questions, answers, scores, api_key=api_key)
+                st.write_stream(stream)
         else:
             st.warning("Configure your API Key to generate AI summaries.")
 
@@ -631,7 +668,9 @@ elif mode == "RAG Search":
     if not api_key and "Full" in answer_mode:
         st.warning("Configure your DeepSeek API Key for AI-generated answers.")
     else:
-        q = st.text_input("", placeholder="Ask anything about Transformer, RAG, LoRA, LLM...", label_visibility="collapsed")
+        q = st.text_input(
+            "", placeholder="Ask anything about Transformer, RAG, LoRA, LLM...", label_visibility="collapsed"
+        )
 
         if st.button("Search", type="primary", use_container_width=True) and q:
             if "Quick" in answer_mode:
@@ -654,17 +693,23 @@ elif mode == "RAG Search":
                         badge = '<span class="score-badge score-red">Low Confidence</span>'
 
                     st.divider()
-                    st.markdown(f"""
+                    st.markdown(
+                        f"""
                     <div class="card" style="border-color:rgba(99,102,241,0.4);">
                         <div class="card-header">Best Match {badge}</div>
                         <div class="card-content" style="font-size:1.05rem;line-height:1.8;">{_html(result["content"])}</div>
                         <div class="card-source">Relevance score: {_html(score)} (0=best, 250=worst)</div>
                     </div>
-                    """, unsafe_allow_html=True)
+                    """,
+                        unsafe_allow_html=True,
+                    )
             else:
                 try:
                     st.divider()
-                    st.markdown('<div class="card" style="border-color:rgba(34,197,94,0.4);"><div class="card-header">AI Generated Answer</div></div>', unsafe_allow_html=True)
+                    st.markdown(
+                        '<div class="card" style="border-color:rgba(34,197,94,0.4);"><div class="card-header">AI Generated Answer</div></div>',
+                        unsafe_allow_html=True,
+                    )
                     with st.spinner(""):
                         stream = rag_query_stream(q, api_key)
                         st.write_stream(stream)
@@ -692,7 +737,7 @@ elif mode == "Knowledge Base":
 
     with st.expander(" Preview Content", expanded=True):
         try:
-            with open(f"data/{selected_kb}", "r", encoding="utf-8") as f:
+            with open(f"data/{selected_kb}", encoding="utf-8") as f:
                 content = f.read()
                 preview = content[:3000] + "..." if len(content) > 3000 else content
                 st.text_area("Content", preview, height=300, disabled=True, label_visibility="collapsed")
@@ -723,6 +768,7 @@ elif mode == "Knowledge Base":
             with st.spinner("Rebuilding index..."):
                 try:
                     from core.ingest_knowledge import reset_knowledge_base
+
                     reset_knowledge_base()
                     st.success("Index rebuilt successfully!")
                 except Exception as e:
@@ -731,9 +777,7 @@ elif mode == "Knowledge Base":
         st.subheader("Index Status")
         if os.path.exists("chroma_db"):
             size = sum(
-                os.path.getsize(os.path.join(dirpath, fn))
-                for dirpath, _, files in os.walk("chroma_db")
-                for fn in files
+                os.path.getsize(os.path.join(dirpath, fn)) for dirpath, _, files in os.walk("chroma_db") for fn in files
             )
             st.metric("Index Size", f"{size / 1024:.1f} KB")
             st.info("Index is ready.")
@@ -741,4 +785,7 @@ elif mode == "Knowledge Base":
             st.warning("Index not found. Please build it first.")
 
 # ── Footer ──
-st.markdown('<div class="footer">AI Interview Copilot &copy; 2026 &middot; Powered by DeepSeek + ChromaDB</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="footer">AI Interview Copilot &copy; 2026 &middot; Powered by DeepSeek + ChromaDB</div>',
+    unsafe_allow_html=True,
+)

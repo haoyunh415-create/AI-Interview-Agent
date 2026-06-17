@@ -65,9 +65,7 @@ class Evaluator(BaseAgent):
 
         followup_instruction = ""
         if followup_count >= MAX_FOLLOWUPS_PER_STAGE:
-            followup_instruction = (
-                "\n注意：本阶段追问次数已达上限，请设置 needs_followup 为 false。"
-            )
+            followup_instruction = "\n注意：本阶段追问次数已达上限，请设置 needs_followup 为 false。"
 
         prompt = EVALUATOR_TEMPLATE.format(
             question=question,
@@ -91,13 +89,16 @@ class Evaluator(BaseAgent):
         )
 
         self.memory_set("eval.latest", result, {"question": question, "stage": stage})
-        self.publish_event(Events.ANSWER_EVALUATED, {
-            "score": result,
-            "question": question,
-            "answer": answer,
-            "stage": stage,
-            "needs_followup": result.get("needs_followup", False),
-        })
+        self.publish_event(
+            Events.ANSWER_EVALUATED,
+            {
+                "score": result,
+                "question": question,
+                "answer": answer,
+                "stage": stage,
+                "needs_followup": result.get("needs_followup", False),
+            },
+        )
 
         return result
 
@@ -118,9 +119,7 @@ class Evaluator(BaseAgent):
 
         followup_instruction = ""
         if followup_count >= MAX_FOLLOWUPS_PER_STAGE:
-            followup_instruction = (
-                "\n注意：本阶段追问次数已达上限，请设置 needs_followup 为 false。"
-            )
+            followup_instruction = "\n注意：本阶段追问次数已达上限，请设置 needs_followup 为 false。"
 
         yield "🔍 分析回答中...\n\n"
 
@@ -143,10 +142,14 @@ class Evaluator(BaseAgent):
             result = self._parse_json(collected)
         except ValueError:
             result = {
-                "correctness": 0, "logic": 0, "depth": 0, "expression": 0,
+                "correctness": 0,
+                "logic": 0,
+                "depth": 0,
+                "expression": 0,
                 "summary": "评分解析失败",
                 "improvement": "LLM 输出格式异常",
-                "needs_followup": False, "followup_reason": "",
+                "needs_followup": False,
+                "followup_reason": "",
                 PARSE_ERROR_KEY: True,
             }
 
@@ -155,13 +158,16 @@ class Evaluator(BaseAgent):
 
         self.memory_set("eval.latest", result, {"question": question, "stage": stage})
         self.memory_set("eval.formatted", self.format_report(result), {"question": question})
-        self.publish_event(Events.ANSWER_EVALUATED, {
-            "score": result,
-            "question": question,
-            "answer": answer,
-            "stage": stage,
-            "needs_followup": result.get("needs_followup", False),
-        })
+        self.publish_event(
+            Events.ANSWER_EVALUATED,
+            {
+                "score": result,
+                "question": question,
+                "answer": answer,
+                "stage": stage,
+                "needs_followup": result.get("needs_followup", False),
+            },
+        )
 
         yield " ✅\n\n"
         yield self.format_report(result) + "\n"
@@ -196,8 +202,10 @@ class Evaluator(BaseAgent):
             f"改进建议: {s.get('improvement', '继续深化学习')}",
         ]
         if s.get("needs_followup"):
-            lines.extend([
-                "",
-                f"追问原因: {s.get('followup_reason', '需要进一步考察')}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    f"追问原因: {s.get('followup_reason', '需要进一步考察')}",
+                ]
+            )
         return "\n".join(lines)

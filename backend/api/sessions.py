@@ -1,4 +1,5 @@
 """API routes for session management."""
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -25,17 +26,20 @@ def get_sessions(user: str = "guest", limit: int = 10) -> SessionListResponse:
     result = []
     for row in rows:
         import json
+
         try:
             history = json.loads(row["history"]) if isinstance(row["history"], str) else []
         except (json.JSONDecodeError, TypeError):
             history = []
-        result.append({
-            "id": row["id"],
-            "topic": row["topic"],
-            "stage_index": row["stage_index"],
-            "question_count": len(history),
-            "updated_at": row["updated_at"],
-        })
+        result.append(
+            {
+                "id": row["id"],
+                "topic": row["topic"],
+                "stage_index": row["stage_index"],
+                "question_count": len(history),
+                "updated_at": row["updated_at"],
+            }
+        )
     return SessionListResponse(sessions=result)
 
 
@@ -59,14 +63,16 @@ def search_interviews(
     rows = db_search(q, user=user, limit=limit)
     results = []
     for row in rows:
-        results.append({
-            "id": row["id"],
-            "user": row["user"],
-            "topic": row["topic"],
-            "question": row["question"],
-            "answer": row["answer"][:200] + ("..." if len(row["answer"]) > 200 else ""),
-            "score": row["score"],
-            "stage": row["stage"],
-            "time": row["time"],
-        })
+        results.append(
+            {
+                "id": row["id"],
+                "user": row["user"],
+                "topic": row["topic"],
+                "question": row["question"],
+                "answer": row["answer"][:200] + ("..." if len(row["answer"]) > 200 else ""),
+                "score": row["score"],
+                "stage": row["stage"],
+                "time": row["time"],
+            }
+        )
     return {"results": results, "total": len(results)}

@@ -24,8 +24,7 @@ class TestGetLlm:
         assert a is b  # cached
 
     def test_ollama_no_key_needed(self):
-        with patch.dict("os.environ", {"LLM_PROVIDER": "ollama"}), \
-             patch("core.llm._create_ollama") as mock_create:
+        with patch.dict("os.environ", {"LLM_PROVIDER": "ollama"}), patch("core.llm._create_ollama") as mock_create:
             mock_create.return_value = "ollama_instance"
             clear_cache()
             llm = get_llm(None, 0.5)

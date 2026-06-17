@@ -18,9 +18,9 @@ All backends:
   - Use thread-local connections (one connection per thread)
 """
 
+import contextlib
 import os
 import threading
-from collections.abc import Sequence
 from typing import Any
 
 from core.config import DATA_DIR
@@ -36,6 +36,7 @@ def _log_info(msg: str, *args: Any) -> None:
     global _log
     if _log is None:
         from core.logging_config import get_logger
+
         _log = get_logger("db.backend")
     _log.info(msg, *args)
 
@@ -44,6 +45,7 @@ def _log_warn(msg: str, *args: Any) -> None:
     global _log
     if _log is None:
         from core.logging_config import get_logger
+
         _log = get_logger("db.backend")
     _log.warning(msg, *args)
 
@@ -71,10 +73,12 @@ def get_backend() -> Any:
     if uri.startswith("postgresql"):
         _log_info("creating PostgreSQL backend: %s", uri)
         from backend.db.backends.postgres import PostgresBackend
+
         backend = PostgresBackend(uri)
     else:
         _log_info("creating SQLite backend: %s", uri)
         from backend.db.backends.sqlite import SqliteBackend
+
         backend = SqliteBackend(uri)
 
     _local.backend = backend
@@ -85,8 +89,6 @@ def reset_backend() -> None:
     """Close and clear the cached backend for this thread."""
     backend: Any = getattr(_local, "backend", None)
     if backend is not None:
-        try:
+        with contextlib.suppress(Exception):
             backend.close()
-        except Exception:
-            pass
         _local.backend = None

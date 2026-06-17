@@ -1,4 +1,5 @@
 """API routes for mock interview mode."""
+
 from __future__ import annotations
 
 import asyncio
@@ -10,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from backend.limiter import limiter
-from backend.session_store import create_session, get_api_key, get_interview_state, get_orchestrator
+from backend.session_store import create_session, get_interview_state, get_orchestrator
 from core.api_key import resolve_api_key
 from core.config import MAX_FOLLOWUPS_PER_STAGE, RATE_LIMIT_LLM
 from core.constants import STAGES, TOPIC_MAP
@@ -135,6 +136,7 @@ async def start_interview(req: StartRequest, request: Request) -> StartResponse:
     except Exception as e:
         raise HTTPException(500, str(e)) from e
 
+
 @router.post("/interview/answer", response_model=AnswerResponse)
 async def submit_answer(req: AnswerRequest) -> AnswerResponse:
     orch = get_orchestrator(req.session_id)
@@ -152,8 +154,12 @@ async def submit_answer(req: AnswerRequest) -> AnswerResponse:
         # Evaluate answer (contains sync LLM calls 鈥?run in thread pool)
         score_json, report, needs_followup = await asyncio.to_thread(
             orch.evaluate_answer,
-            "guest", stored_topic, current_q, req.answer,
-            state["stage_index"], req.session_id,
+            "guest",
+            stored_topic,
+            current_q,
+            req.answer,
+            state["stage_index"],
+            req.session_id,
         )
 
         # Record history
@@ -193,7 +199,9 @@ async def submit_answer(req: AnswerRequest) -> AnswerResponse:
 
         # 鈹€鈹€ Guard: LLM produced empty question 鈫?mark as completed 鈹€鈹€
         if next_question is not None and not next_question.strip():
-            _log.warning("LLM returned empty next_question for session=%s 鈥?marking interview as completed", req.session_id)
+            _log.warning(
+                "LLM returned empty next_question for session=%s 鈥?marking interview as completed", req.session_id
+            )
             completed = True
             next_question = None
 
@@ -209,7 +217,10 @@ async def submit_answer(req: AnswerRequest) -> AnswerResponse:
             stored_topic = state.get("_topic", "Transformer鏍稿績鍘熺悊")
             await asyncio.to_thread(
                 orch.save_interview_report,
-                req.session_id, "guest", stored_topic, state["history"],
+                req.session_id,
+                "guest",
+                stored_topic,
+                state["history"],
             )
 
         return AnswerResponse(
@@ -224,6 +235,7 @@ async def submit_answer(req: AnswerRequest) -> AnswerResponse:
         )
     except Exception as e:
         raise HTTPException(500, str(e)) from e
+
 
 @router.post("/interview/hint", response_model=HintResponse)
 async def get_hint(req: HintRequest) -> HintResponse:
@@ -247,6 +259,7 @@ async def get_hint(req: HintRequest) -> HintResponse:
         return HintResponse(hint=hint)
     except Exception as e:
         raise HTTPException(500, str(e)) from e
+
 
 @router.post("/interview/report", response_model=ReportResponse)
 async def generate_report(req: ReportRequest) -> ReportResponse:
@@ -274,6 +287,7 @@ async def generate_report(req: ReportRequest) -> ReportResponse:
         return ReportResponse(report=report)
     except Exception as e:
         raise HTTPException(500, str(e)) from e
+
 
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 # Session resume
@@ -319,6 +333,7 @@ async def resume_interview(req: ResumeRequest) -> ResumeResponse:
     # Parse history and state
     try:
         import json
+
         history = json.loads(row["history"]) if isinstance(row["history"], str) else []
     except (json.JSONDecodeError, TypeError):
         history = []
@@ -468,7 +483,10 @@ def submit_answer_stream(req: AnswerRequest):
 
         # 鈹€鈹€ Guard: LLM produced empty next_question 鈫?mark as completed 鈹€鈹€
         if next_question is not None and not next_question.strip():
-            _log.warning("LLM returned empty next_question for session=%s 鈥?marking interview as completed (stream)", req.session_id)
+            _log.warning(
+                "LLM returned empty next_question for session=%s 鈥?marking interview as completed (stream)",
+                req.session_id,
+            )
             completed = True
             next_question = None
 
@@ -484,24 +502,31 @@ def submit_answer_stream(req: AnswerRequest):
         if completed and state.get("history"):
             try:
                 orch.save_interview_report(
-                    req.session_id, "guest", stored_topic, state["history"],
+                    req.session_id,
+                    "guest",
+                    stored_topic,
+                    state["history"],
                 )
             except Exception as exc:
                 import traceback
+
                 _log.error("Failed to save interview report: %s\n%s", exc, traceback.format_exc())
 
         # 鈹€鈹€ Phase 5: Send done event 鈹€鈹€
-        done_data = json.dumps({
-            "type": "done",
-            "score_text": report,
-            "score_json": score_json,
-            "needs_followup": needs_followup,
-            "is_followup": is_followup,
-            "next_question": next_question,
-            "stage_index": new_stage_index,
-            "completed": completed,
-            "has_error": score_json.get("_parse_error", False),
-        }, ensure_ascii=False)
+        done_data = json.dumps(
+            {
+                "type": "done",
+                "score_text": report,
+                "score_json": score_json,
+                "needs_followup": needs_followup,
+                "is_followup": is_followup,
+                "next_question": next_question,
+                "stage_index": new_stage_index,
+                "completed": completed,
+                "has_error": score_json.get("_parse_error", False),
+            },
+            ensure_ascii=False,
+        )
         yield f"data: {done_data}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

@@ -51,9 +51,9 @@ class BaseAgent:
         role: str,
         temperature: float | None = None,
         api_key: str | None = None,
-        shared_memory: Any = None,   # SharedMemory (or None)
-        message_bus: Any = None,     # MessageBus  (or None)
-        telemetry: Any = None,       # TelemetryCollector (or None)
+        shared_memory: Any = None,  # SharedMemory (or None)
+        message_bus: Any = None,  # MessageBus  (or None)
+        telemetry: Any = None,  # TelemetryCollector (or None)
         provider: str | None = None,
         model: str | None = None,
     ) -> None:
@@ -107,8 +107,7 @@ class BaseAgent:
             elapsed = (time.monotonic() - t0) * 1000
 
             # 3. Telemetry
-            self._record_telemetry("invoke", full_prompt, result, elapsed, success=True,
-                                   temperature=temp or 0, **usage)
+            self._record_telemetry("invoke", full_prompt, result, elapsed, success=True, temperature=temp or 0, **usage)
 
             # 4. Store in cache
             if not skip_cache:
@@ -119,17 +118,16 @@ class BaseAgent:
 
         except Exception as exc:
             elapsed = (time.monotonic() - t0) * 1000
-            self._record_telemetry("invoke", full_prompt, "", elapsed,
-                                   success=False, error=str(exc), temperature=temp or 0)
+            self._record_telemetry(
+                "invoke", full_prompt, "", elapsed, success=False, error=str(exc), temperature=temp or 0
+            )
             raise
 
     # ═════════════════════════════════════════════════════
     # Public API: invoke_stream — composes cache → stream → telemetry
     # ═════════════════════════════════════════════════════
 
-    def invoke_stream(
-        self, prompt: str, temperature: float | None = None, skip_cache: bool = False
-    ) -> Iterator[str]:
+    def invoke_stream(self, prompt: str, temperature: float | None = None, skip_cache: bool = False) -> Iterator[str]:
         """Yield tokens one at a time. Caches full response after completion."""
         full_prompt = f"{self.role}\n\n{prompt}"
         temp = temperature if temperature is not None else self._temperature
@@ -160,14 +158,22 @@ class BaseAgent:
                 llm_cache.set(full_prompt, temp or 0, full_response)
 
             # 4. Telemetry
-            self._record_telemetry("invoke_stream", full_prompt, full_response, elapsed,
-                                   success=True, temperature=temp or 0)
+            self._record_telemetry(
+                "invoke_stream", full_prompt, full_response, elapsed, success=True, temperature=temp or 0
+            )
 
         except Exception as exc:
             elapsed = (time.monotonic() - t0) * 1000
             response_text = "".join(response_parts)
-            self._record_telemetry("invoke_stream", full_prompt, response_text, elapsed,
-                                   success=False, error=str(exc), temperature=temp or 0)
+            self._record_telemetry(
+                "invoke_stream",
+                full_prompt,
+                response_text,
+                elapsed,
+                success=False,
+                error=str(exc),
+                temperature=temp or 0,
+            )
             raise
         finally:
             log_duration(self._logger, f"invoke_stream [{self.name}]", t0)
@@ -200,8 +206,9 @@ class BaseAgent:
             elapsed = (time.monotonic() - t0) * 1000
 
             # 3. Telemetry
-            self._record_telemetry("ainvoke", full_prompt, result, elapsed, success=True,
-                                   temperature=temp or 0, **usage)
+            self._record_telemetry(
+                "ainvoke", full_prompt, result, elapsed, success=True, temperature=temp or 0, **usage
+            )
 
             # 4. Store in cache
             if not skip_cache:
@@ -212,17 +219,16 @@ class BaseAgent:
 
         except Exception as exc:
             elapsed = (time.monotonic() - t0) * 1000
-            self._record_telemetry("ainvoke", full_prompt, "", elapsed,
-                                   success=False, error=str(exc), temperature=temp or 0)
+            self._record_telemetry(
+                "ainvoke", full_prompt, "", elapsed, success=False, error=str(exc), temperature=temp or 0
+            )
             raise
 
     # ═════════════════════════════════════════════════════
     # JSON helpers
     # ═════════════════════════════════════════════════════
 
-    def invoke_json(
-        self, prompt: str, temperature: float | None = None, skip_cache: bool = False
-    ) -> dict[str, Any]:
+    def invoke_json(self, prompt: str, temperature: float | None = None, skip_cache: bool = False) -> dict[str, Any]:
         """Invoke LLM and parse JSON from response."""
         raw = self.invoke(prompt, temperature, skip_cache=skip_cache)
         return self._parse_json(raw)
@@ -278,10 +284,7 @@ class BaseAgent:
                         except json.JSONDecodeError:
                             break
 
-        raise ValueError(
-            f"Failed to parse JSON from LLM output. "
-            f"Raw response (first 200 chars): {raw[:200]}"
-        )
+        raise ValueError(f"Failed to parse JSON from LLM output. Raw response (first 200 chars): {raw[:200]}")
 
     # ═════════════════════════════════════════════════════
     # Inter-agent communication helpers

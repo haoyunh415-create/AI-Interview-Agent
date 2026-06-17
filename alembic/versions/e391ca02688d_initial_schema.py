@@ -11,21 +11,23 @@ exist and skip the CREATE TABLE / ALTER TABLE logic.
 Generated hand-aligned from the raw SQL in ``db/database.py``.
 """
 
-from typing import Sequence, Union
+import contextlib
+from collections.abc import Sequence
 
-from alembic import op
 from sqlalchemy import text as sa_text
 
+from alembic import op
 
 revision: str = "e391ca02688d"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
     # ── interviews ──
-    op.execute(sa_text("""
+    op.execute(
+        sa_text("""
         CREATE TABLE IF NOT EXISTS interviews (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user TEXT NOT NULL DEFAULT 'guest',
@@ -37,26 +39,36 @@ def upgrade() -> None:
             time TEXT NOT NULL,
             created_at TEXT
         )
-    """))
-    op.execute(sa_text("""
+    """)
+    )
+    op.execute(
+        sa_text("""
         CREATE INDEX IF NOT EXISTS idx_interviews_user_time
         ON interviews(user, time, id)
-    """))
-    op.execute(sa_text("""
+    """)
+    )
+    op.execute(
+        sa_text("""
         CREATE INDEX IF NOT EXISTS idx_interviews_topic
         ON interviews(topic)
-    """))
-    op.execute(sa_text("""
+    """)
+    )
+    op.execute(
+        sa_text("""
         CREATE INDEX IF NOT EXISTS idx_interviews_stage
         ON interviews(stage)
-    """))
-    op.execute(sa_text("""
+    """)
+    )
+    op.execute(
+        sa_text("""
         CREATE INDEX IF NOT EXISTS idx_interviews_question
         ON interviews(question)
-    """))
+    """)
+    )
 
     # ── sessions ──
-    op.execute(sa_text("""
+    op.execute(
+        sa_text("""
         CREATE TABLE IF NOT EXISTS sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user TEXT NOT NULL DEFAULT 'guest',
@@ -72,18 +84,24 @@ def upgrade() -> None:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
-    """))
-    op.execute(sa_text("""
+    """)
+    )
+    op.execute(
+        sa_text("""
         CREATE INDEX IF NOT EXISTS idx_sessions_user_status
         ON sessions(user, status)
-    """))
-    op.execute(sa_text("""
+    """)
+    )
+    op.execute(
+        sa_text("""
         CREATE INDEX IF NOT EXISTS idx_sessions_updated
         ON sessions(updated_at)
-    """))
+    """)
+    )
 
     # ── users (auth) ──
-    op.execute(sa_text("""
+    op.execute(
+        sa_text("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
@@ -91,14 +109,18 @@ def upgrade() -> None:
             display_name TEXT DEFAULT '',
             created_at TEXT NOT NULL
         )
-    """))
-    op.execute(sa_text("""
+    """)
+    )
+    op.execute(
+        sa_text("""
         CREATE INDEX IF NOT EXISTS idx_users_username
         ON users(username)
-    """))
+    """)
+    )
 
     # ── bookmarks ──
-    op.execute(sa_text("""
+    op.execute(
+        sa_text("""
         CREATE TABLE IF NOT EXISTS bookmarks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user TEXT NOT NULL DEFAULT 'guest',
@@ -110,22 +132,24 @@ def upgrade() -> None:
             tags TEXT DEFAULT '[]',
             created_at TEXT NOT NULL
         )
-    """))
-    op.execute(sa_text("""
+    """)
+    )
+    op.execute(
+        sa_text("""
         CREATE INDEX IF NOT EXISTS idx_bookmarks_user
         ON bookmarks(user, created_at)
-    """))
+    """)
+    )
 
     # ── FTS5 virtual table (optional — silently skipped if fts5 not available) ──
-    try:
-        op.execute(sa_text("""
+    with contextlib.suppress(Exception):
+        op.execute(
+            sa_text("""
             CREATE VIRTUAL TABLE IF NOT EXISTS interviews_fts
             USING fts5(user, topic, question, answer,
                        content='interviews', content_rowid='id')
-        """))
-    except Exception:
-        # FTS5 not available — the app handles this gracefully
-        pass
+        """)
+        )
 
 
 def downgrade() -> None:
@@ -135,4 +159,3 @@ def downgrade() -> None:
     op.execute(sa_text("DROP TABLE IF EXISTS sessions"))
     op.execute(sa_text("DROP TABLE IF EXISTS interviews"))
     op.execute(sa_text("DROP TABLE IF EXISTS interviews_fts"))
-

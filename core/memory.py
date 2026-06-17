@@ -15,7 +15,7 @@ import random
 import string
 import time
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -38,6 +38,7 @@ class MemoryEntry:
     Every write records which agent wrote it and when, enabling downstream
     agents to judge staleness or source credibility.
     """
+
     value: Any
     source: str
     timestamp: float = field(default_factory=time.monotonic)
@@ -82,11 +83,12 @@ class SharedMemory:
     ) -> None:
         ns = key.split(".", 1)[0] if "." in key else "_root"
         self._store[key] = MemoryEntry(
-            value=value, source=source, metadata=metadata or {},
+            value=value,
+            source=source,
+            metadata=metadata or {},
         )
         self._ns_index[ns].add(key)
-        _log.debug("mem W source=%s  ns=%s  key=%s  type=%s",
-                    source, ns, key, type(value).__name__)
+        _log.debug("mem W source=%s  ns=%s  key=%s  type=%s", source, ns, key, type(value).__name__)
 
     # ── Read API ──
 
@@ -99,11 +101,7 @@ class SharedMemory:
 
     def get_namespace(self, ns: str) -> dict[str, Any]:
         """Return all key → value pairs under *ns* as a flat dict."""
-        return {
-            key: self._store[key].value
-            for key in self._ns_index.get(ns, set())
-            if key in self._store
-        }
+        return {key: self._store[key].value for key in self._ns_index.get(ns, set()) if key in self._store}
 
     def get_latest_in_namespace(self, ns: str) -> tuple[str, Any] | None:
         """Return (key, value) of the most recently written entry in *ns*.
@@ -123,6 +121,10 @@ class SharedMemory:
         return best_key, self._store[best_key].value
 
     # ── Introspection ──
+
+    def __iter__(self) -> Iterator[str]:
+        """Iterate over all keys in the store."""
+        return iter(self._store)
 
     def keys(self, ns: str | None = None) -> list[str]:
         if ns is not None:
@@ -145,10 +147,7 @@ class SharedMemory:
         The returned dict has shape ``{key: {value, source, metadata}}``
         and can be restored via ``load_dict()``.
         """
-        return {
-            key: {"value": e.value, "source": e.source, "metadata": e.metadata}
-            for key, e in self._store.items()
-        }
+        return {key: {"value": e.value, "source": e.source, "metadata": e.metadata} for key, e in self._store.items()}
 
     def load_dict(self, data: dict[str, Any]) -> None:
         """Restore memory from a dict previously returned by ``to_dict()``.
@@ -174,9 +173,11 @@ class SharedMemory:
 # Message Bus
 # ═══════════════════════════════════════════════════════
 
+
 @dataclass
 class Message:
     """A structured event published by an agent via the message bus."""
+
     type: str
     data: dict[str, Any]
     source: str
@@ -223,6 +224,7 @@ class MessageBus:
 
         if in_async:
             for cb in callbacks:
+
                 async def _invoke(cb: Callable = cb) -> None:
                     try:
                         if asyncio.iscoroutinefunction(cb):
@@ -231,7 +233,8 @@ class MessageBus:
                             cb(msg)
                     except Exception as exc:
                         _log.error("bus async %s FAILED: %s", label, exc)
-                loop.create_task(_invoke())
+
+                _task = loop.create_task(_invoke())  # noqa: RUF006
         else:
             for cb in callbacks:
                 try:
@@ -246,8 +249,7 @@ class MessageBus:
         self._history.append(msg)
         if len(self._history) > self._max_history:
             self._history.pop(0)
-        _log.info("bus >>> type=%s  source=%s  data_keys=%s",
-                  type, source, list(data.keys()))
+        _log.info("bus >>> type=%s  source=%s  data_keys=%s", type, source, list(data.keys()))
 
         # Notify type-specific subscribers
         type_cbs = self._subscribers.get(type, [])
@@ -291,16 +293,18 @@ class MessageBus:
 # Canonical event types
 # ═══════════════════════════════════════════════════════
 
+
 class Events:
     """Well-known event type constants used across all agents."""
-    RESUME_ANALYZED       = "resume.analyzed"
-    CONTEXT_RETRIEVED     = "context.retrieved"
-    QUESTION_GENERATED    = "question.generated"
-    FOLLOWUP_GENERATED    = "followup.generated"
-    ANSWER_EVALUATED      = "answer.evaluated"
-    STAGE_COMPLETED       = "stage.completed"
-    REPORT_GENERATED      = "report.generated"
-    HINT_REQUESTED        = "hint.requested"
+
+    RESUME_ANALYZED = "resume.analyzed"
+    CONTEXT_RETRIEVED = "context.retrieved"
+    QUESTION_GENERATED = "question.generated"
+    FOLLOWUP_GENERATED = "followup.generated"
+    ANSWER_EVALUATED = "answer.evaluated"
+    STAGE_COMPLETED = "stage.completed"
+    REPORT_GENERATED = "report.generated"
+    HINT_REQUESTED = "hint.requested"
     CUSTOM_QUESTIONS_READY = "custom_job.questions_ready"
 
     # Interview lifecycle shortcuts for orchestrator subscriptions

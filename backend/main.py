@@ -18,22 +18,23 @@ for _mod in ("torch", "transformers", "transformers.utils"):
 # ════════════════════════════════════════
 # No need to call load_dotenv() here.
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
+from fastapi import FastAPI, HTTPException, Request  # noqa: E402
+from fastapi.exceptions import RequestValidationError  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
 
-from backend.api import auth, bookmarks, chat, interview, report, reports, resume, sessions
-from backend.limiter import limiter
-from core.config import JWT_ALGORITHM, LLM_PROVIDER, SENTRY_DSN, validate_config
-from core.logging_config import get_logger
-from backend.db.database import init_db
+from backend.api import auth, bookmarks, chat, interview, report, reports, resume, sessions  # noqa: E402
+from backend.db.database import init_db  # noqa: E402
+from backend.limiter import limiter  # noqa: E402
+from core.config import JWT_ALGORITHM, LLM_PROVIDER, SENTRY_DSN, validate_config  # noqa: E402
+from core.logging_config import get_logger  # noqa: E402
 
 if SENTRY_DSN:
     import sentry_sdk
+
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         enable_tracing=True,
@@ -60,23 +61,27 @@ async def lifespan(app: FastAPI):
         _log.info("All configuration checks passed")
 
     from agents.knowledge_retriever import create_demo_knowledge_base
+
     kb_count = create_demo_knowledge_base()
     if kb_count:
         _log.info("Created %d demo knowledge document(s)", kb_count)
 
     # ===
-    # from previous shutdown 
+    # from previous shutdown
     from backend.session_store import restore_sessions
+
     restored = restore_sessions()
     if restored:
         _log.info("Restored %d session(s) from snapshot on disk", restored)
 
     from backend.session_store import start_cleanup_task
+
     start_cleanup_task()
 
     yield
     _log.info("Shutting down 鈥?persisting sessions...")
     from backend.session_store import persist_all_sessions, stop_cleanup_task
+
     stop_cleanup_task()
     persist_all_sessions()
 
@@ -137,14 +142,20 @@ async def log_requests(request: Request, call_next):
         elapsed = (time.monotonic() - t0) * 1000
         _log.info(
             "%s %s 鈫?%s (%.0fms)",
-            request.method, request.url.path, response.status_code, elapsed,
+            request.method,
+            request.url.path,
+            response.status_code,
+            elapsed,
         )
         return response
     except Exception as exc:
         elapsed = (time.monotonic() - t0) * 1000
         _log.error(
             "%s %s 鈫?ERROR %s (%.0fms)",
-            request.method, request.url.path, exc, elapsed,
+            request.method,
+            request.url.path,
+            exc,
+            elapsed,
         )
         return JSONResponse(
             status_code=500,
@@ -154,6 +165,7 @@ async def log_requests(request: Request, call_next):
 
 # ════════════════════════════════════════
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -172,7 +184,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Pydantic validation errors 鈫?readable 400 response."""
     errors = [
-        {"loc": " 鈫?".join(str(l) for l in err["loc"]), "msg": err["msg"], "type": err["type"]}
+        {"loc": " 鈫?".join(str(part) for part in err["loc"]), "msg": err["msg"], "type": err["type"]}
         for err in exc.errors()
     ]
     return JSONResponse(
@@ -231,6 +243,7 @@ app.include_router(reports.router, prefix="/api/v1", tags=["api"])
 # ════════════════════════════════════════
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 
+
 @app.get("/api/config")
 def app_config() -> dict:
     """Return server configuration for the frontend.
@@ -239,6 +252,7 @@ def app_config() -> dict:
     API key field, which LLM provider is configured, etc.
     """
     from core.api_key import get_server_provider_info
+
     return get_server_provider_info()
 
 
@@ -255,6 +269,7 @@ def health() -> dict:
     db_ok = False
     try:
         from backend.db.database import _get_backend
+
         _get_backend().execute("SELECT 1")
         db_ok = True
     except Exception:
@@ -262,6 +277,7 @@ def health() -> dict:
 
     # LLM cache info
     from agents.base import BaseAgent
+
     cache_stats = BaseAgent.cache_info()
 
     # Uptime

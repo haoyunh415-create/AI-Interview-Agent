@@ -37,6 +37,7 @@ def _get_backend() -> Any:
             _BACKEND = None
 
     import backend.db.backend as _bk_mod
+
     _log.info("initializing database backend: %s", _bk_mod.DB_URL)
     _BACKEND = _bk_mod.get_backend()
     return _BACKEND
@@ -52,6 +53,7 @@ def set_db_path(path: str) -> None:
     DB_PATH = path
     # Also update the backend's DB_URL so it uses the new path
     from backend.db import backend as _backend_module
+
     _backend_module.DB_URL = f"sqlite:///{path}"
     # Reset BOTH caches - database._BACKEND and backend.db.backend._local.backend
     _reset_backend()
@@ -122,13 +124,9 @@ def init_db() -> None:
     if "created_at" not in columns:
         backend.execute("ALTER TABLE interviews ADD COLUMN created_at TEXT")
         if is_sqlite:
-            backend.execute(
-                "UPDATE interviews SET created_at = COALESCE(time, datetime('now', 'localtime'))"
-            )
+            backend.execute("UPDATE interviews SET created_at = COALESCE(time, datetime('now', 'localtime'))")
         else:
-            backend.execute(
-                "UPDATE interviews SET created_at = COALESCE(time, NOW()::date)"
-            )
+            backend.execute("UPDATE interviews SET created_at = COALESCE(time, NOW()::date)")
 
     backend.execute("""
         CREATE INDEX IF NOT EXISTS idx_interviews_user_time
@@ -246,8 +244,10 @@ def _init_fts5(backend: Any) -> None:
     """Create FTS5 virtual table for full-text search on interviews."""
     global _FTS_ENABLED
     try:
-        backend.execute("CREATE VIRTUAL TABLE IF NOT EXISTS interviews_fts USING fts5("
-                        "user, topic, question, answer, content='interviews', content_rowid='id')")
+        backend.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS interviews_fts USING fts5("
+            "user, topic, question, answer, content='interviews', content_rowid='id')"
+        )
         backend.execute_script("""
             CREATE TRIGGER IF NOT EXISTS interviews_ai AFTER INSERT ON interviews BEGIN
                 INSERT INTO interviews_fts(rowid, user, topic, question, answer)
@@ -274,7 +274,7 @@ def _init_fts5(backend: Any) -> None:
         _FTS_ENABLED = True
         _log.info("FTS5 full-text search enabled")
     except Exception as exc:
-        if hasattr(backend, '_conn') and 'fts5' in str(exc):
+        if hasattr(backend, "_conn") and "fts5" in str(exc):
             _log.warning("FTS5 not available 鈥?falling back to LIKE search: %s", exc)
         else:
             _log.warning("FTS5 setup failed (non-fatal): %s", exc)
@@ -295,14 +295,22 @@ def _first(rows: list[Any]) -> Any | None:
 
 def _ensure_column(backend: Any, table: str, column: str, definition: str) -> None:
     """Add a column to a table if it doesn't exist (idempotent migration)."""
-    is_sqlite = not backend.__class__.__name__.startswith("Postgres")
     existing = _column_names(table)
     if column not in existing:
         backend.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
         _log.info("added column %s.%s", table, column)
 
 
-def save(user: str, topic: str, q: str, a: str, score: object, stage: str, status: str = "answered", session_id: str | None = None) -> None:
+def save(
+    user: str,
+    topic: str,
+    q: str,
+    a: str,
+    score: object,
+    stage: str,
+    status: str = "answered",
+    session_id: str | None = None,
+) -> None:
     """Save an interview record with status tracking.
 
     *status* can be ``"answered"``, ``"skipped"``, or ``"partial"``.
@@ -338,14 +346,16 @@ def load_user(user: str, limit: int | None = None) -> list[Any]:
 
 def load_user_stats(user: str) -> Any | None:
     user = (user or "guest").strip() or "guest"
-    return _first(_get_backend().execute(
-        """
+    return _first(
+        _get_backend().execute(
+            """
         SELECT COUNT(*) AS total_questions, COUNT(DISTINCT topic) AS topics_covered,
                COUNT(DISTINCT stage) AS stages_covered, MAX(time) AS last_time
         FROM interviews WHERE user = ?
         """,
-        (user,),
-    ))
+            (user,),
+        )
+    )
 
 
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# Session persistence
@@ -372,8 +382,7 @@ def save_session(
         backend.execute(
             "UPDATE sessions SET stage_index=?, history=?, profile=?, context=?, "
             "custom_questions=?, followup_count=?, updated_at=? WHERE id=? AND user=?",
-            (stage_index, history_json, profile_json, context,
-             custom_json, followup_count, now, session_id, user),
+            (stage_index, history_json, profile_json, context, custom_json, followup_count, now, session_id, user),
         )
         return session_id
     else:
@@ -381,16 +390,18 @@ def save_session(
             "INSERT INTO sessions (user, topic, stage_index, history, profile, context, "
             "custom_questions, followup_count, status, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?)",
-            (user, topic, stage_index, history_json, profile_json, context,
-             custom_json, followup_count, now, now),
+            (user, topic, stage_index, history_json, profile_json, context, custom_json, followup_count, now, now),
         )
         return backend.lastrowid  # type: ignore[return-value]
 
 
 def load_session(session_id: int) -> Any | None:
-    return _first(_get_backend().execute(
-        "SELECT * FROM sessions WHERE id = ?", (session_id,),
-    ))
+    return _first(
+        _get_backend().execute(
+            "SELECT * FROM sessions WHERE id = ?",
+            (session_id,),
+        )
+    )
 
 
 def list_sessions(user: str, limit: int = 5) -> list[Any]:
@@ -433,9 +444,12 @@ def save_memory_data(session_id: int, memory_dict: dict[str, Any]) -> bool:
 
 
 def load_memory_data(session_id: int) -> dict[str, Any] | None:
-    row = _first(_get_backend().execute(
-        "SELECT memory_data FROM sessions WHERE id=?", (session_id,),
-    ))
+    row = _first(
+        _get_backend().execute(
+            "SELECT memory_data FROM sessions WHERE id=?",
+            (session_id,),
+        )
+    )
     if row is None:
         return None
     raw = row["memory_data"]
@@ -451,8 +465,13 @@ def load_memory_data(session_id: int) -> dict[str, Any] | None:
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# Bookmark CRUD
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 def save_bookmark(
-    user: str, question: str, answer: str = "", topic: str = "",
-    stage: str = "", notes: str = "", tags: list[str] | None = None,
+    user: str,
+    question: str,
+    answer: str = "",
+    topic: str = "",
+    stage: str = "",
+    notes: str = "",
+    tags: list[str] | None = None,
 ) -> int:
     user = (user or "guest").strip() or "guest"
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -469,13 +488,16 @@ def save_bookmark(
 def delete_bookmark(bookmark_id: int, user: str) -> bool:
     user = (user or "guest").strip() or "guest"
     before = _get_backend().execute(
-        "SELECT 1 FROM bookmarks WHERE id=? AND user=?", (bookmark_id, user),
+        "SELECT 1 FROM bookmarks WHERE id=? AND user=?",
+        (bookmark_id, user),
     )
     _get_backend().execute(
-        "DELETE FROM bookmarks WHERE id=? AND user=?", (bookmark_id, user),
+        "DELETE FROM bookmarks WHERE id=? AND user=?",
+        (bookmark_id, user),
     )
     after = _get_backend().execute(
-        "SELECT 1 FROM bookmarks WHERE id=? AND user=?", (bookmark_id, user),
+        "SELECT 1 FROM bookmarks WHERE id=? AND user=?",
+        (bookmark_id, user),
     )
     return len(before) > 0 and len(after) == 0
 
@@ -507,7 +529,8 @@ def is_bookmarked(user: str, question: str) -> bool:
 def update_bookmark_notes(bookmark_id: int, user: str, notes: str) -> bool:
     user = (user or "guest").strip() or "guest"
     _get_backend().execute(
-        "UPDATE bookmarks SET notes=? WHERE id=? AND user=?", (notes, bookmark_id, user),
+        "UPDATE bookmarks SET notes=? WHERE id=? AND user=?",
+        (notes, bookmark_id, user),
     )
     return True
 
@@ -520,9 +543,7 @@ def search_interviews(query: str, user: str = "guest", limit: int = 20) -> list[
 
     if _FTS_ENABLED and query.strip():
         safe_query = " ".join(
-            f'"{term}"*' if " " not in term else f'"{term}"'
-            for term in query.strip().split()
-            if term
+            f'"{term}"*' if " " not in term else f'"{term}"' for term in query.strip().split() if term
         )
         if not safe_query:
             return []
@@ -546,9 +567,13 @@ def search_interviews(query: str, user: str = "guest", limit: int = 20) -> list[
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# Per-session Reports
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 
+
 def save_report(
-    session_id: str, user: str, topic: str,
-    ai_summary: str, stats_json: str | None = None,
+    session_id: str,
+    user: str,
+    topic: str,
+    ai_summary: str,
+    stats_json: str | None = None,
 ) -> int:
     """Save or update a per-session AI report. Returns the row id."""
     user = (user or "guest").strip() or "guest"
@@ -561,8 +586,7 @@ def save_report(
     )
     if existing:
         backend.execute(
-            "UPDATE reports SET ai_summary=?, stats_json=?, created_at=? "
-            "WHERE session_id=? AND user=?",
+            "UPDATE reports SET ai_summary=?, stats_json=?, created_at=? WHERE session_id=? AND user=?",
             (ai_summary, stats_json, now, session_id, user),
         )
         return existing[0]["id"]
@@ -579,7 +603,8 @@ def load_report(session_id: str, user: str = "guest") -> Any | None:
     """Load a report for a specific session."""
     user = (user or "guest").strip() or "guest"
     rows = _get_backend().execute(
-        "SELECT * FROM reports WHERE session_id=? AND user=?", (session_id, user),
+        "SELECT * FROM reports WHERE session_id=? AND user=?",
+        (session_id, user),
     )
     return rows[0] if rows else None
 
@@ -588,8 +613,7 @@ def list_report_sessions(user: str = "guest", limit: int = 20) -> list[Any]:
     """List all sessions that have reports, newest first."""
     user = (user or "guest").strip() or "guest"
     return _get_backend().execute(
-        "SELECT id, session_id, user, topic, created_at FROM reports WHERE user=? "
-        "ORDER BY created_at DESC LIMIT ?",
+        "SELECT id, session_id, user, topic, created_at FROM reports WHERE user=? ORDER BY created_at DESC LIMIT ?",
         (user, limit),
     )
 

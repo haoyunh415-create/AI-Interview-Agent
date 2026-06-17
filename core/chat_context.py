@@ -18,7 +18,7 @@ def estimate_tokens(text: str) -> int:
     if not text:
         return 0
     # Chinese chars (~2 per token), others (~4 per token)
-    chinese_count = sum(1 for c in text if '一' <= c <= '鿿')
+    chinese_count = sum(1 for c in text if "一" <= c <= "鿿")
     other_count = len(text) - chinese_count
     return max(1, int(chinese_count / 2 + other_count / 4))
 

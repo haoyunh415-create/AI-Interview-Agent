@@ -32,8 +32,7 @@ def _load_prompts() -> dict[str, Any]:
     try:
         with open(_PROMPTS_JSON_PATH, encoding="utf-8") as f:
             _loaded = json.load(f)
-        _log.info("prompts loaded from %s (version=%s)",
-                  _PROMPTS_JSON_PATH, _loaded.get("version", "unknown"))
+        _log.info("prompts loaded from %s (version=%s)", _PROMPTS_JSON_PATH, _loaded.get("version", "unknown"))
         return _loaded
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         _log.warning("failed to load prompts.json: %s — using hardcoded fallbacks", exc)
@@ -345,6 +344,7 @@ CUSTOM_JOB_TEMPLATE: str = _get(
 # ══════════════════════════════════════════════════════
 # Hot-reload helper
 # ══════════════════════════════════════════════════════
+
 
 def reload_prompts() -> None:
     """Force-reload prompts from the JSON file on next access.

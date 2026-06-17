@@ -8,7 +8,6 @@ This enables the "server-side proxy" pattern:
 """
 
 import os
-from typing import Optional
 
 from core.logging_config import get_logger
 
@@ -18,7 +17,7 @@ _log = get_logger("api_key")
 _SERVER_HAS_KEY: bool | None = None
 
 
-def resolve_api_key(api_key: Optional[str] = None) -> str:
+def resolve_api_key(api_key: str | None = None) -> str:
     """Return *api_key* if provided, otherwise resolve from server environment.
 
     The resolution order:
@@ -44,8 +43,7 @@ def resolve_api_key(api_key: Optional[str] = None) -> str:
         return ""
 
     _log.warning(
-        "No API key provided and no env var found for provider '%s'. "
-        "LLM calls will fail unless Ollama is used.",
+        "No API key provided and no env var found for provider '%s'. LLM calls will fail unless Ollama is used.",
         provider,
     )
     return ""

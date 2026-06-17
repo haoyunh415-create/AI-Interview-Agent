@@ -2,7 +2,6 @@
 Publishes the report to SharedMemory and emits ``report.generated`` on the bus.
 """
 
-from collections.abc import Iterator
 from typing import Any
 
 from agents.base import BaseAgent
@@ -49,7 +48,7 @@ class ReportWriter(BaseAgent):
             )
 
         stages_lines = []
-        for i, (q, a, s) in enumerate(zip(questions, answers, scores), 1):
+        for i, (q, a, s) in enumerate(zip(questions, answers, scores, strict=False), 1):
             stages_lines.append(f"### Q{i}: {q}\n回答: {a}\n评分: {s}\n")
         stages_data = "\n".join(stages_lines)
 
@@ -71,8 +70,7 @@ class ReportWriter(BaseAgent):
         if prompt is None:
             yield "暂无面试记录"
             return
-        for chunk in self.invoke_stream(prompt):
-            yield chunk
+        yield from self.invoke_stream(prompt)
 
     def generate_final_report(self, history, profile=None):
         questions = [h.get("q", "") for h in history]
@@ -82,6 +80,9 @@ class ReportWriter(BaseAgent):
 
     def _publish_report(self, report: str) -> None:
         self.memory_set("report.latest", report)
-        self.publish_event(Events.REPORT_GENERATED, {
-            "report": report[:500],
-        })
+        self.publish_event(
+            Events.REPORT_GENERATED,
+            {
+                "report": report[:500],
+            },
+        )

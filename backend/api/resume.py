@@ -1,10 +1,8 @@
 """API routes for resume analysis — text-based and PDF upload."""
 
 import asyncio
-import os
-import tempfile
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from backend.session_store import create_session, get_orchestrator
@@ -122,6 +120,7 @@ async def analyze_resume_pdf(
 # PDF text extraction
 # ═════════════════════════════════════════════════════
 
+
 def _extract_pdf_text(pdf_bytes: bytes) -> str:
     """Extract text from a PDF file using PyMuPDF (fitz)."""
     try:
@@ -135,7 +134,7 @@ def _extract_pdf_text(pdf_bytes: bytes) -> str:
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         pages: list[str] = []
-        for i, page in enumerate(doc):
+        for _i, page in enumerate(doc):
             text = page.get_text().strip()
             if text:
                 pages.append(text)

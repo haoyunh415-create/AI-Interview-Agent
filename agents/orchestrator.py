@@ -10,11 +10,11 @@ from agents.interviewer import Interviewer
 from agents.knowledge_retriever import KnowledgeRetriever
 from agents.report_writer import ReportWriter
 from agents.resume_analyst import ResumeAnalyst
+from backend.db.database import save
 from core.constants import STAGES
 from core.logging_config import get_logger, log_duration
 from core.memory import MessageBus, SharedMemory
 from core.telemetry import TelemetryCollector
-from backend.db.database import save
 
 _log = get_logger("orchestrator")
 
@@ -37,24 +37,44 @@ class InterviewOrchestrator:
         self.telemetry = TelemetryCollector(max_traces=500)
 
         self.resume_analyst = ResumeAnalyst(
-            api_key, self.shared_memory, self.message_bus, self.telemetry,
-            provider=provider, model=model,
+            api_key,
+            self.shared_memory,
+            self.message_bus,
+            self.telemetry,
+            provider=provider,
+            model=model,
         )
         self.interviewer = Interviewer(
-            api_key, self.shared_memory, self.message_bus, self.telemetry,
-            provider=provider, model=model,
+            api_key,
+            self.shared_memory,
+            self.message_bus,
+            self.telemetry,
+            provider=provider,
+            model=model,
         )
         self.evaluator = Evaluator(
-            api_key, self.shared_memory, self.message_bus, self.telemetry,
-            provider=provider, model=model,
+            api_key,
+            self.shared_memory,
+            self.message_bus,
+            self.telemetry,
+            provider=provider,
+            model=model,
         )
         self.report_writer = ReportWriter(
-            api_key, self.shared_memory, self.message_bus, self.telemetry,
-            provider=provider, model=model,
+            api_key,
+            self.shared_memory,
+            self.message_bus,
+            self.telemetry,
+            provider=provider,
+            model=model,
         )
         self.knowledge_retriever = KnowledgeRetriever(
-            api_key, self.shared_memory, self.message_bus, self.telemetry,
-            provider=provider, model=model,
+            api_key,
+            self.shared_memory,
+            self.message_bus,
+            self.telemetry,
+            provider=provider,
+            model=model,
         )
 
         self._setup_subscriptions()
@@ -66,12 +86,14 @@ class InterviewOrchestrator:
         self.message_bus.subscribe_all(self._on_any_event)
 
     def _on_any_event(self, msg: Any) -> None:
-        self._agent_log.append({
-            "type": msg.type,
-            "source": msg.source,
-            "time": time.strftime("%H:%M:%S"),
-            "data_keys": list(msg.data.keys()),
-        })
+        self._agent_log.append(
+            {
+                "type": msg.type,
+                "source": msg.source,
+                "time": time.strftime("%H:%M:%S"),
+                "data_keys": list(msg.data.keys()),
+            }
+        )
         if len(self._agent_log) > 200:
             self._agent_log.pop(0)
 
@@ -110,8 +132,12 @@ class InterviewOrchestrator:
         stage = STAGES[stage_idx]
         self._status = "questioning"
         return self.interviewer.generate_question(
-            topic=topic, stage=stage, context="",
-            history=history, profile=None, custom_questions=custom_questions,
+            topic=topic,
+            stage=stage,
+            context="",
+            history=history,
+            profile=None,
+            custom_questions=custom_questions,
         )
 
     def generate_followup(
@@ -126,7 +152,9 @@ class InterviewOrchestrator:
         self._followup_count += 1
         return self.interviewer.generate_followup(
             original_question=original_question,
-            answer=answer, evaluation=evaluation, stage=stage,
+            answer=answer,
+            evaluation=evaluation,
+            stage=stage,
         )
 
     def evaluate_answer(
@@ -144,15 +172,23 @@ class InterviewOrchestrator:
 
         try:
             score_json = self.evaluator.evaluate(
-                question, answer, stage, self._followup_count, topic=topic,
+                question,
+                answer,
+                stage,
+                self._followup_count,
+                topic=topic,
             )
         except ValueError as e:
             _log.error("evaluation failed: %s", e)
             score_json = {
-                "correctness": 0, "logic": 0, "depth": 0, "expression": 0,
+                "correctness": 0,
+                "logic": 0,
+                "depth": 0,
+                "expression": 0,
                 "summary": f"评分解析失败，请重试。错误: {e}",
                 "improvement": "LLM 输出格式异常，建议重新提交答案",
-                "needs_followup": False, "followup_reason": "",
+                "needs_followup": False,
+                "followup_reason": "",
                 PARSE_ERROR_KEY: True,
             }
 
@@ -165,24 +201,36 @@ class InterviewOrchestrator:
 
     def evaluate_answer_stream(
         self,
-        user: str, topic: str, question: str, answer: str,
-        stage_idx: int, session_id: str | None = None,
+        user: str,
+        topic: str,
+        question: str,
+        answer: str,
+        stage_idx: int,
+        session_id: str | None = None,
     ):
         stage = STAGES[stage_idx]
         self._status = "evaluating"
         t0 = time.monotonic()
         try:
             yield from self.evaluator.evaluate_stream(
-                question, answer, stage, self._followup_count, topic=topic,
+                question,
+                answer,
+                stage,
+                self._followup_count,
+                topic=topic,
             )
             score_json = self.shared_memory.get("eval.latest", {})
         except ValueError as e:
             _log.error("evaluation stream failed: %s", e)
             score_json = {
-                "correctness": 0, "logic": 0, "depth": 0, "expression": 0,
+                "correctness": 0,
+                "logic": 0,
+                "depth": 0,
+                "expression": 0,
                 "summary": f"评分解析失败，请重试。错误: {e}",
                 "improvement": "LLM 输出格式异常，建议重新提交答案",
-                "needs_followup": False, "followup_reason": "",
+                "needs_followup": False,
+                "followup_reason": "",
                 PARSE_ERROR_KEY: True,
             }
             self.shared_memory.set("eval.latest", score_json, "orchestrator")
@@ -191,27 +239,39 @@ class InterviewOrchestrator:
         self._status = "scored"
 
     def generate_question_stream(
-        self, topic: str, stage_idx: int, history: list[dict[str, str]] | None = None,
+        self,
+        topic: str,
+        stage_idx: int,
+        history: list[dict[str, str]] | None = None,
         custom_questions: list[str] | None = None,
     ):
         self._followup_count = 0
         stage = STAGES[stage_idx]
         self._status = "questioning"
         yield from self.interviewer.generate_question_stream(
-            topic=topic, stage=stage, context="",
-            history=history, profile=None, custom_questions=custom_questions,
+            topic=topic,
+            stage=stage,
+            context="",
+            history=history,
+            profile=None,
+            custom_questions=custom_questions,
         )
 
     def generate_followup_stream(
-        self, original_question: str, answer: str,
-        evaluation: dict[str, Any], stage_idx: int,
+        self,
+        original_question: str,
+        answer: str,
+        evaluation: dict[str, Any],
+        stage_idx: int,
     ):
         stage = STAGES[stage_idx]
         self._status = "followup"
         self._followup_count += 1
         yield from self.interviewer.generate_followup_stream(
-            original_question=original_question, answer=answer,
-            evaluation=evaluation, stage=stage,
+            original_question=original_question,
+            answer=answer,
+            evaluation=evaluation,
+            stage=stage,
         )
 
     def generate_hint(self, question: str) -> str:
@@ -221,11 +281,17 @@ class InterviewOrchestrator:
         yield from self.interviewer.generate_hint_stream(question)
 
     def generate_report(
-        self, questions: list[str], answers: list[str], scores: list[str],
+        self,
+        questions: list[str],
+        answers: list[str],
+        scores: list[str],
     ) -> str:
         self._status = "reporting"
         report = self.report_writer.generate_summary(
-            questions, answers, scores, profile=None,
+            questions,
+            answers,
+            scores,
+            profile=None,
         )
         self._status = "completed"
         return report
@@ -235,6 +301,7 @@ class InterviewOrchestrator:
 
     def persist_memory(self, session_id: int) -> None:
         from backend.db.database import save_memory_data
+
         try:
             save_memory_data(session_id, self.shared_memory.to_dict())
         except Exception as exc:
@@ -242,6 +309,7 @@ class InterviewOrchestrator:
 
     def load_memory(self, session_id: int) -> None:
         from backend.db.database import load_memory_data
+
         try:
             data = load_memory_data(session_id)
             if data:
@@ -251,7 +319,7 @@ class InterviewOrchestrator:
 
     def get_shared_memory_snapshot(self) -> dict[str, Any]:
         snap: dict[str, Any] = {}
-        for key in self.shared_memory.keys():
+        for key in self.shared_memory:
             entry = self.shared_memory.get_entry(key)
             if entry is None:
                 continue
@@ -267,12 +335,16 @@ class InterviewOrchestrator:
         return snap
 
     def save_interview_report(
-        self, session_id: str, user: str, topic: str,
+        self,
+        session_id: str,
+        user: str,
+        topic: str,
         history: list[dict[str, str]],
     ) -> str | None:
         if not history:
             return None
         from backend.db.database import save_report as _save_report
+
         ai_summary = None
         try:
             questions = [h["q"] for h in history]

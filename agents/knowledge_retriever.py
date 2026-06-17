@@ -10,9 +10,7 @@ Improvements over pure keyword matching:
 - Graceful degradation: works without any extra dependencies
 """
 
-import os
 import re
-from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,16 +23,101 @@ from core.memory import Events
 _log = get_logger("agent.knowledge_retriever")
 
 _STOPWORDS: set[str] = {
-    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could", "should",
-    "may", "might", "shall", "can", "need", "dare", "ought", "used",
-    "to", "of", "in", "for", "on", "with", "at", "by", "from", "as", "into",
-    "through", "during", "before", "after", "above", "below", "between",
-    "this", "that", "these", "those", "it", "its", "they", "them", "their",
-    "what", "which", "who", "whom", "when", "where", "why", "how",
-    "和", "的", "了", "在", "是", "我", "有", "不", "就", "人", "都", "一",
-    "一个", "上", "也", "很", "到", "说", "要", "去", "你", "会", "着",
-    "没有", "看", "好", "自己", "这", "他", "她", "它", "们",
+    "the",
+    "a",
+    "an",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "shall",
+    "can",
+    "need",
+    "dare",
+    "ought",
+    "used",
+    "to",
+    "of",
+    "in",
+    "for",
+    "on",
+    "with",
+    "at",
+    "by",
+    "from",
+    "as",
+    "into",
+    "through",
+    "during",
+    "before",
+    "after",
+    "above",
+    "below",
+    "between",
+    "this",
+    "that",
+    "these",
+    "those",
+    "it",
+    "its",
+    "they",
+    "them",
+    "their",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "when",
+    "where",
+    "why",
+    "how",
+    "和",
+    "的",
+    "了",
+    "在",
+    "是",
+    "我",
+    "有",
+    "不",
+    "就",
+    "人",
+    "都",
+    "一",
+    "一个",
+    "上",
+    "也",
+    "很",
+    "到",
+    "说",
+    "要",
+    "去",
+    "你",
+    "会",
+    "着",
+    "没有",
+    "看",
+    "好",
+    "自己",
+    "这",
+    "他",
+    "她",
+    "它",
+    "们",
 }
 
 _TERM_MAP: dict[str, set[str]] = {
@@ -100,9 +183,13 @@ class KnowledgeRetriever(BaseAgent):
             self._load_documents()
         context = self._find_best_match(topic)
         self.memory_set(f"context.{topic}", context, {"topic": topic})
-        self.publish_event(Events.CONTEXT_RETRIEVED, {
-            "topic": topic, "length": len(context),
-        })
+        self.publish_event(
+            Events.CONTEXT_RETRIEVED,
+            {
+                "topic": topic,
+                "length": len(context),
+            },
+        )
         _log.info("retrieved context for '%s': %d chars", topic, len(context))
         return context
 
@@ -138,20 +225,28 @@ class KnowledgeRetriever(BaseAgent):
                 if heading_match:
                     body = "\n".join(current_lines).strip()
                     if body or current_heading:
-                        self._sections.append(_Section(
-                            doc_name=doc_name, heading=current_heading,
-                            content=body, heading_level=current_level,
-                        ))
+                        self._sections.append(
+                            _Section(
+                                doc_name=doc_name,
+                                heading=current_heading,
+                                content=body,
+                                heading_level=current_level,
+                            )
+                        )
                     current_level = len(heading_match.group(1))
                     current_heading = heading_match.group(2).strip()
                     current_lines = []
                 else:
                     current_lines.append(line)
             body = "\n".join(current_lines).strip()
-            self._sections.append(_Section(
-                doc_name=doc_name, heading=current_heading,
-                content=body, heading_level=current_level,
-            ))
+            self._sections.append(
+                _Section(
+                    doc_name=doc_name,
+                    heading=current_heading,
+                    content=body,
+                    heading_level=current_level,
+                )
+            )
 
     def _build_index(self) -> None:
         self._index = {}
@@ -182,13 +277,13 @@ class KnowledgeRetriever(BaseAgent):
         if not any(section_scores):
             return ""
         ranked = sorted(enumerate(section_scores), key=lambda x: x[1], reverse=True)
-        best_idx, best_score = ranked[0]
+        _best_idx, best_score = ranked[0]
         second_score = ranked[1][1] if len(ranked) > 1 else 0
         if best_score > second_score * 2:
             return self._format_result([ranked[0]])
         else:
             top_n = sum(1 for _, s in ranked if s >= best_score * 0.5)
-            return self._format_result(ranked[:max(top_n, 2)])
+            return self._format_result(ranked[: max(top_n, 2)])
 
     def _expand_query(self, topic: str) -> list[str]:
         terms = [topic]

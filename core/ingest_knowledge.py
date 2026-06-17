@@ -1,12 +1,19 @@
 import os
 import shutil
+
 from langchain_community.document_loaders import TextLoader
+from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+
 from core.config import (
-    EMBEDDING_PATH, MODEL_PATH, DB_PATH, KNOWLEDGE_FILE, AUTO_KB_FILE,
-    CHUNK_SIZE, CHUNK_OVERLAP,
+    AUTO_KB_FILE,
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    DB_PATH,
+    EMBEDDING_PATH,
+    KNOWLEDGE_FILE,
+    MODEL_PATH,
 )
 
 

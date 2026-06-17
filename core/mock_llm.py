@@ -24,8 +24,10 @@ from typing import Any
 # Duck-typed message objects (no langchain dependency)
 # ═══════════════════════════════════════════════════════
 
+
 class MockAIMessage:
     """Duck-typed replacement for ``langchain_core.messages.AIMessage``."""
+
     def __init__(self, content: str = "") -> None:
         self.content = content
 
@@ -35,6 +37,7 @@ class MockAIMessage:
 
 class MockAIMessageChunk:
     """Duck-typed replacement for ``langchain_core.messages.AIMessageChunk``."""
+
     def __init__(self, content: str = "") -> None:
         self.content = content
 
@@ -47,34 +50,33 @@ class MockAIMessageChunk:
 # ═══════════════════════════════════════════════════════
 
 DEFAULT_RESPONSES: dict[str, str] = {
-    "简历分析": json.dumps({
-        "tech_stack": ["Python", "PyTorch", "LangChain"],
-        "level": "中级",
-        "domains": ["NLP", "RAG"],
-        "gaps": ["分布式系统", "MLOps"],
-        "highlights": ["构建了基于RAG的问答系统"],
-        "years_of_experience": 2,
-    }, ensure_ascii=False),
-
-    "评分": json.dumps({
-        "correctness": 7,
-        "logic": 6,
-        "depth": 5,
-        "expression": 8,
-        "summary": "基础概念掌握较好，但深度不够",
-        "improvement": "建议深入理解Transformer原理",
-        "needs_followup": True,
-        "followup_reason": "回答缺少具体实现细节",
-    }, ensure_ascii=False),
-
-    "追问": "你刚才提到了注意力机制，能具体说说在实现Multi-Head Attention时，"
-            "为什么需要做线性变换吗？",
-
-    "出题": "请解释Transformer中的Self-Attention机制是如何计算的，"
-            "并说明它为什么比RNN更适合处理长序列？",
-
+    "简历分析": json.dumps(
+        {
+            "tech_stack": ["Python", "PyTorch", "LangChain"],
+            "level": "中级",
+            "domains": ["NLP", "RAG"],
+            "gaps": ["分布式系统", "MLOps"],
+            "highlights": ["构建了基于RAG的问答系统"],
+            "years_of_experience": 2,
+        },
+        ensure_ascii=False,
+    ),
+    "评分": json.dumps(
+        {
+            "correctness": 7,
+            "logic": 6,
+            "depth": 5,
+            "expression": 8,
+            "summary": "基础概念掌握较好，但深度不够",
+            "improvement": "建议深入理解Transformer原理",
+            "needs_followup": True,
+            "followup_reason": "回答缺少具体实现细节",
+        },
+        ensure_ascii=False,
+    ),
+    "追问": "你刚才提到了注意力机制，能具体说说在实现Multi-Head Attention时，为什么需要做线性变换吗？",
+    "出题": "请解释Transformer中的Self-Attention机制是如何计算的，并说明它为什么比RNN更适合处理长序列？",
     "提示": "试试用 Query-Key-Value 的角度来思考",
-
     "报告": (
         "## 面试总结报告\n\n"
         "### 整体评价：良好\n\n"
@@ -86,7 +88,6 @@ DEFAULT_RESPONSES: dict[str, str] = {
         "1. 建议深入理解Self-Attention的数学原理\n"
         "2. 建议多关注工程实践\n"
     ),
-
     "生成问题": (
         "1. 请解释Transformer的Encoder-Decoder结构\n"
         "2. 为什么需要位置编码？\n"
@@ -100,6 +101,7 @@ DEFAULT_RESPONSES: dict[str, str] = {
 # ═══════════════════════════════════════════════════════
 # MockChatOpenAI
 # ═══════════════════════════════════════════════════════
+
 
 class MockChatOpenAI:
     """In-process mock of ``langchain_openai.ChatOpenAI``.
@@ -163,7 +165,7 @@ class MockChatOpenAI:
     @staticmethod
     def _chunk_iter(text: str, size: int) -> Iterator[MockAIMessageChunk]:
         for i in range(0, len(text), size):
-            yield MockAIMessageChunk(content=text[i:i + size])
+            yield MockAIMessageChunk(content=text[i : i + size])
 
     # ── Test helpers ──
 
@@ -201,18 +203,18 @@ class MockChatOpenAI:
     def _check_failures(self, prompt: str) -> None:
         for trigger in self.fail_on_prompts:
             if trigger in prompt:
-                raise RuntimeError(
-                    f"MockChatOpenAI simulated failure triggered by {trigger!r}"
-                )
+                raise RuntimeError(f"MockChatOpenAI simulated failure triggered by {trigger!r}")
 
     def _record_call(self, method: str, prompt: str) -> None:
         self._call_count += 1
-        self.call_history.append({
-            "n": self._call_count,
-            "method": method,
-            "prompt": prompt[:200],
-            "prompt_len": len(prompt),
-        })
+        self.call_history.append(
+            {
+                "n": self._call_count,
+                "method": method,
+                "prompt": prompt[:200],
+                "prompt_len": len(prompt),
+            }
+        )
 
     def __repr__(self) -> str:
         return f"<MockChatOpenAI calls={self._call_count} >"

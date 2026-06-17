@@ -14,6 +14,7 @@ from dataclasses import dataclass
 # ── Load .env file at the earliest possible point ──
 # (before any os.getenv calls below)
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # ── Paths ──
@@ -62,7 +63,7 @@ TIMER_ENABLED = os.getenv("TIMER_ENABLED", "false").lower() == "true"
 TIMER_DURATION = int(os.getenv("TIMER_DURATION", "120"))
 
 # ── LLM response cache ──
-LLM_CACHE_TTL = int(os.getenv("LLM_CACHE_TTL", "300"))        # 5 minutes default
+LLM_CACHE_TTL = int(os.getenv("LLM_CACHE_TTL", "300"))  # 5 minutes default
 LLM_CACHE_MAXSIZE = int(os.getenv("LLM_CACHE_MAXSIZE", "256"))  # max entries
 
 # ── JWT Auth ──
@@ -80,11 +81,13 @@ def _resolve_jwt_secret() -> str:
     if _JWT_ENV_SECRET:
         if _JWT_ENV_SECRET == "change-me-in-production":
             import warnings
+
             warnings.warn(
                 "JWT_SECRET is still set to the default 'change-me-in-production'! "
                 "Set a strong random secret via env var, or delete the env var to "
                 "auto-generate one.",
-                RuntimeWarning, stacklevel=2,
+                RuntimeWarning,
+                stacklevel=2,
             )
         return _JWT_ENV_SECRET
 
@@ -95,6 +98,7 @@ def _resolve_jwt_secret() -> str:
 
     # Generate a new random secret
     import secrets
+
     new_secret = secrets.token_hex(64)
     try:
         with open(secret_file, "w", encoding="utf-8") as f:
@@ -110,10 +114,10 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "72"))
 
 # ── Rate limiting ──
-RATE_LIMIT_DEFAULT = os.getenv("RATE_LIMIT_DEFAULT", "30/minute")   # general endpoints
-RATE_LIMIT_AUTH = os.getenv("RATE_LIMIT_AUTH", "5/minute")          # register/login
+RATE_LIMIT_DEFAULT = os.getenv("RATE_LIMIT_DEFAULT", "30/minute")  # general endpoints
+RATE_LIMIT_AUTH = os.getenv("RATE_LIMIT_AUTH", "5/minute")  # register/login
 RATE_LIMIT_LLM = os.getenv("RATE_LIMIT_LLM", "10/minute")
-RETRIEVAL_SCORE_THRESHOLD = 0.5           # LLM endpoints
+RETRIEVAL_SCORE_THRESHOLD = 0.5  # LLM endpoints
 
 
 @dataclass
@@ -124,6 +128,7 @@ class Settings:
     module-level constants.  For backwards compatibility the module-level
     constants above remain in place and reference this bag.
     """
+
     # Paths
     DATA_DIR: str = DATA_DIR
     # LLM
@@ -246,12 +251,12 @@ def validate_config() -> list[str]:
     allowed = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8765")
     if "*" in allowed:
         warnings_list.append(
-            "ALLOWED_ORIGINS contains '*' — CORS is wide open. "
-            "Restrict to specific origins in production."
+            "ALLOWED_ORIGINS contains '*' — CORS is wide open. Restrict to specific origins in production."
         )
 
     for msg in warnings_list:
         import logging
+
         logging.getLogger("config").warning("Config: %s", msg)
 
     return warnings_list

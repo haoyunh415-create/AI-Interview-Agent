@@ -1,6 +1,6 @@
 """API routes for per-session report history."""
 
-import asyncio
+import contextlib
 import json
 from collections import defaultdict
 from statistics import mean
@@ -9,10 +9,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from agents.report_writer import ReportWriter
-from core.api_key import resolve_api_key
-from core.constants import STAGES
 from backend.db.database import list_report_sessions, load_report, load_user_session_data
+from core.constants import STAGES
 
 router = APIRouter()
 
@@ -80,18 +78,22 @@ def _compute_per_stage_breakdown(data: list[Any]) -> list[dict[str, Any]]:
             if scores:
                 score_avg = round(mean(scores), 1)
 
-        result.append({
-            "stage": stage_name,
-            "total": len(rows),
-            "answered_count": len(answered),
-            "skipped_count": len(skipped),
-            "score": score_avg,
-            "questions": [r["question"] for r in answered],
-            "answers": [r["answer"] for r in answered],
-            "answers_summary": [r["answer"][:120] + "..." if len(r["answer"]) > 120 else r["answer"] for r in answered],
-            "scores": [r["score"] for r in answered],
-            "skipped_questions": [r["question"] for r in skipped],
-        })
+        result.append(
+            {
+                "stage": stage_name,
+                "total": len(rows),
+                "answered_count": len(answered),
+                "skipped_count": len(skipped),
+                "score": score_avg,
+                "questions": [r["question"] for r in answered],
+                "answers": [r["answer"] for r in answered],
+                "answers_summary": [
+                    r["answer"][:120] + "..." if len(r["answer"]) > 120 else r["answer"] for r in answered
+                ],
+                "scores": [r["score"] for r in answered],
+                "skipped_questions": [r["question"] for r in skipped],
+            }
+        )
     return result
 
 
@@ -100,15 +102,17 @@ def list_reports(user: str = "guest", limit: int = 20):
     """List all interview sessions with saved reports, newest first."""
     user = (user or "guest").strip() or "guest"
     rows = list_report_sessions(user, limit)
-    return SessionListResponse(sessions=[
-        SessionListItem(
-            id=r["id"],
-            session_id=r["session_id"],
-            topic=r["topic"],
-            created_at=r["created_at"],
-        )
-        for r in rows
-    ])
+    return SessionListResponse(
+        sessions=[
+            SessionListItem(
+                id=r["id"],
+                session_id=r["session_id"],
+                topic=r["topic"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+    )
 
 
 @router.get("/reports/{session_id}", response_model=SessionReportResponse)
@@ -123,10 +127,8 @@ def get_session_report(session_id: str, user: str = "guest"):
     stage_breakdown = _compute_per_stage_breakdown(data) if data else None
 
     ai_summary = None
-    try:
+    with contextlib.suppress(KeyError, IndexError, TypeError):
         ai_summary = report["ai_summary"]
-    except (KeyError, IndexError, TypeError):
-        pass
 
     return SessionReportResponse(
         session_id=report["session_id"],

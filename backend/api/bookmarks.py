@@ -1,4 +1,5 @@
 """API routes for bookmarks."""
+
 import json
 from typing import Any
 
@@ -73,16 +74,18 @@ def get_bookmarks(user: str = "guest", topic: str | None = None) -> BookmarkList
             tags = json.loads(row["tags"]) if isinstance(row["tags"], str) else row["tags"]
         except (json.JSONDecodeError, TypeError):
             tags = []
-        result.append({
-            "id": row["id"],
-            "question": row["question"],
-            "answer": row["answer"] or "",
-            "topic": row["topic"] or "",
-            "stage": row["stage"] or "",
-            "notes": row["notes"] or "",
-            "tags": tags,
-            "created_at": row["created_at"] or "",
-        })
+        result.append(
+            {
+                "id": row["id"],
+                "question": row["question"],
+                "answer": row["answer"] or "",
+                "topic": row["topic"] or "",
+                "stage": row["stage"] or "",
+                "notes": row["notes"] or "",
+                "tags": tags,
+                "created_at": row["created_at"] or "",
+            }
+        )
     return BookmarkListResponse(bookmarks=result)
 
 

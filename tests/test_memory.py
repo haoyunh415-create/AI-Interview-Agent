@@ -1,11 +1,11 @@
 """Tests for SharedMemory and MessageBus — inter-agent communication core."""
 
-
 from core.memory import Events, Message, MessageBus, SharedMemory
 
 # ═══════════════════════════════════════════════════════
 # SharedMemory
 # ═══════════════════════════════════════════════════════
+
 
 class TestSharedMemory:
     def test_set_and_get(self):
@@ -103,6 +103,7 @@ class TestSharedMemory:
 # MessageBus
 # ═══════════════════════════════════════════════════════
 
+
 class TestMessageBus:
     def test_publish_returns_message(self):
         bus = MessageBus()
@@ -162,7 +163,10 @@ class TestMessageBus:
 
     def test_unsubscribe(self):
         bus = MessageBus()
-        def cb(m: Message): pass
+
+        def cb(m: Message):
+            pass
+
         bus.subscribe("ev", cb)
         bus.unsubscribe("ev", cb)
 
@@ -180,8 +184,10 @@ class TestMessageBus:
 
     def test_subscriber_error_does_not_crash(self):
         bus = MessageBus()
+
         def failing(_m):
             raise RuntimeError("oops")
+
         bus.subscribe("ev", failing)
         # This should not raise
         bus.publish("ev", {}, "s")
@@ -199,6 +205,7 @@ class TestMessageBus:
 # ═══════════════════════════════════════════════════════
 # Events constants
 # ═══════════════════════════════════════════════════════
+
 
 class TestEvents:
     def test_constants_are_strings(self):
@@ -221,6 +228,7 @@ class TestEvents:
 # ═══════════════════════════════════════════════════════
 # Integration: SharedMemory + MessageBus together
 # ═══════════════════════════════════════════════════════
+
 
 class TestMemoryBusIntegration:
     def test_agent_writes_memory_and_notifies_bus(self):

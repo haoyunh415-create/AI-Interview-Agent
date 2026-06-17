@@ -51,6 +51,7 @@ class TestInterviewer:
 
     def test_resolve_profile_falls_back_to_memory(self):
         from core.memory import SharedMemory
+
         agent = Interviewer(api_key="test", shared_memory=SharedMemory())
         agent.memory_set("resume.profile", {"level": "高级", "tech_stack": ["Python"]})
         result = agent._resolve_profile(None)
@@ -64,6 +65,7 @@ class TestInterviewer:
 
     def test_resolve_context_falls_back_to_memory(self):
         from core.memory import SharedMemory
+
         agent = Interviewer(api_key="test", shared_memory=SharedMemory())
         agent.memory_set("context.Transformer核心原理", "memory context")
         result = agent._resolve_context("Transformer核心原理")
@@ -143,8 +145,7 @@ class TestInterviewer:
                 stage="基础",
                 context="RAG context",
                 history=[{"q": "What is RAG?"}],
-                profile={"level": "中级", "tech_stack": ["Python", "LangChain"],
-                         "domains": ["NLP"]},
+                profile={"level": "中级", "tech_stack": ["Python", "LangChain"], "domains": ["NLP"]},
             )
             assert "RAG" in prompt
             assert "基础" in prompt
@@ -169,6 +170,7 @@ class TestInterviewer:
 
     def test_publish_question_event(self):
         from core.memory import MessageBus, SharedMemory
+
         agent = Interviewer(
             api_key="test",
             shared_memory=SharedMemory(),
@@ -181,6 +183,7 @@ class TestInterviewer:
 
     def test_publish_followup_event(self):
         from core.memory import MessageBus, SharedMemory
+
         agent = Interviewer(
             api_key="test",
             shared_memory=SharedMemory(),

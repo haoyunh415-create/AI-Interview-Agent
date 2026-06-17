@@ -20,12 +20,12 @@ import os
 from collections.abc import Iterator
 from typing import Any
 
-from core.llm import get_llm
-
 # Re-export the provider info function so callers don't need to know about core.llm
 from core.llm import clear_cache as clear_llm_instances  # noqa: F401
-from core.llm import get_provider_info  # noqa: F401
-
+from core.llm import (
+    get_llm,
+    get_provider_info,  # noqa: F401
+)
 
 # ── Provider API key env-var map ──
 

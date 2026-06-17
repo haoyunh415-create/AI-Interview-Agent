@@ -60,17 +60,20 @@ def _cleanup() -> None:
         del _store[sid]
 
     # Clean lightweight chat sessions
-    chat_expired = [
-        sid for sid, data in _chat_sessions.items()
-        if now - data.get("created_at", 0) > SESSION_TTL
-    ]
+    chat_expired = [sid for sid, data in _chat_sessions.items() if now - data.get("created_at", 0) > SESSION_TTL]
     for sid in chat_expired:
         del _chat_sessions[sid]
 
     total = len(expired) + len(chat_expired)
     if total:
-        _log.info("cleaned up %d expired session(s) (%d interview, %d chat), remaining: %d + %d",
-                  total, len(expired), len(chat_expired), len(_store), len(_chat_sessions))
+        _log.info(
+            "cleaned up %d expired session(s) (%d interview, %d chat), remaining: %d + %d",
+            total,
+            len(expired),
+            len(chat_expired),
+            len(_store),
+            len(_chat_sessions),
+        )
     _last_cleanup = now
 
 
@@ -79,8 +82,7 @@ async def _cleanup_loop() -> None:
     while True:
         await asyncio.sleep(_cleanup_interval)
         _cleanup()
-        _log.debug("background cleanup tick — %d interview, %d chat sessions",
-                   len(_store), len(_chat_sessions))
+        _log.debug("background cleanup tick — %d interview, %d chat sessions", len(_store), len(_chat_sessions))
 
 
 def start_cleanup_task() -> None:
@@ -116,8 +118,13 @@ def create_session(api_key: str | None = None, provider: str | None = None, mode
         "metadata": {},
         "interview_state": _make_default_state(),
     }
-    _log.info("created session id=%s provider=%s model=%s (total active: %d)",
-              session_id, provider or "(env)", model or "(env)", len(_store))
+    _log.info(
+        "created session id=%s provider=%s model=%s (total active: %d)",
+        session_id,
+        provider or "(env)",
+        model or "(env)",
+        len(_store),
+    )
     return session_id
 
 
@@ -170,7 +177,6 @@ def persist_all_sessions() -> int:
         return 0
 
     import json
-    from pathlib import Path
 
     snapshot: dict[str, dict[str, Any]] = {}
     for sid, data in _store.items():
@@ -250,7 +256,9 @@ def restore_sessions() -> int:
 def _snapshot_path():
     """Return the session snapshot file path."""
     from pathlib import Path
+
     from core.config import DATA_DIR
+
     return Path(DATA_DIR) / "sessions_snapshot.json"
 
 
@@ -276,8 +284,7 @@ def create_chat_session(
         "model": model,
         "created_at": time.monotonic(),
     }
-    _log.info("created chat session id=%s (total chat sessions: %d)",
-              session_id, len(_chat_sessions))
+    _log.info("created chat session id=%s (total chat sessions: %d)", session_id, len(_chat_sessions))
     return session_id
 
 

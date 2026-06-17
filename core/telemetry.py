@@ -24,6 +24,7 @@ _log = get_logger("telemetry")
 # Trace entry
 # ═══════════════════════════════════════════════════════
 
+
 @dataclass
 class TraceEntry:
     """Record of a single LLM call.
@@ -31,8 +32,9 @@ class TraceEntry:
     If *input_tokens* or *output_tokens* are given (from API metadata), they
     are used as-is.  Otherwise they are estimated from character lengths.
     """
+
     agent: str
-    method: str          # "invoke" | "invoke_stream" | "invoke_json"
+    method: str  # "invoke" | "invoke_stream" | "invoke_json"
     prompt_len: int
     response_len: int
     latency_ms: float
@@ -55,9 +57,11 @@ class TraceEntry:
 # Agent-level aggregates
 # ═══════════════════════════════════════════════════════
 
+
 @dataclass
 class AgentStats:
     """Aggregated metrics for a single agent."""
+
     call_count: int = 0
     total_latency_ms: float = 0.0
     total_input_tokens: int = 0
@@ -80,6 +84,7 @@ class AgentStats:
 # ═══════════════════════════════════════════════════════
 # TelemetryCollector
 # ═══════════════════════════════════════════════════════
+
 
 class TelemetryCollector:
     """Accumulates LLM call traces and produces session-level metrics.
@@ -157,8 +162,7 @@ class TelemetryCollector:
     def summary(self) -> dict[str, Any]:
         """Session-level summary dict (useful for UI display)."""
         if not self._traces:
-            return {"total_calls": 0, "total_latency_ms": 0, "total_tokens": 0,
-                    "agents": {}, "elapsed_seconds": 0}
+            return {"total_calls": 0, "total_latency_ms": 0, "total_tokens": 0, "agents": {}, "elapsed_seconds": 0}
 
         agent_stats = self.get_agent_stats()
         total_calls = sum(s.call_count for s in agent_stats.values())

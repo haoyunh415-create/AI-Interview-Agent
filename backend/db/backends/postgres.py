@@ -11,6 +11,12 @@ from typing import Any
 
 from core.logging_config import get_logger
 
+try:
+    import psycopg2
+    import psycopg2.extras
+except ImportError:  # pragma: no cover — psycopg2 is optional
+    psycopg2 = None  # type: ignore[assignment]
+
 _log = get_logger("db.postgres")
 
 
@@ -43,9 +49,6 @@ class PostgresBackend:
                 _log.info("reconnecting — stale PostgreSQL connection")
                 self.close()
 
-        import psycopg2
-        import psycopg2.extras
-
         _log.info("creating new PostgreSQL connection: %s", self._db_url)
         self._conn = psycopg2.connect(self._db_url)
         self._conn.autocommit = True
@@ -72,6 +75,7 @@ class PostgresBackend:
         cur = conn.cursor()
         try:
             from psycopg2.extras import execute_values
+
             execute_values(cur, pg_sql, params_list)
         finally:
             cur.close()

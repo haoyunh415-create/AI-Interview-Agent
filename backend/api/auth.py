@@ -6,15 +6,14 @@ Uses JWT (HS256) with configurable expiry.  Passwords hashed with bcrypt.
 from datetime import UTC, datetime, timedelta
 
 import bcrypt as _bcrypt
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
+from backend.db.database import _get_backend
 from backend.limiter import limiter
 from core.config import JWT_ALGORITHM, JWT_EXPIRY_HOURS, JWT_SECRET, RATE_LIMIT_AUTH
-from backend.db.database import _get_backend
 
 router = APIRouter()
 security = HTTPBearer(auto_error=False)
@@ -110,9 +109,7 @@ def register(req: RegisterRequest, request: Request) -> AuthResponse:
     if len(req.password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
 
-    existing_rows = _get_backend().execute(
-        "SELECT id FROM users WHERE username = ?", (req.username,)
-    )
+    existing_rows = _get_backend().execute("SELECT id FROM users WHERE username = ?", (req.username,))
     existing = existing_rows[0] if existing_rows else None
     if existing:
         raise HTTPException(409, "Username already taken")

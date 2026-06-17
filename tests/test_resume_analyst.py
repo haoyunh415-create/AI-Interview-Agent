@@ -33,16 +33,20 @@ class TestResumeAnalyst:
         from core.memory import SharedMemory
         from core.mock_llm import MockChatOpenAI
 
-        mock = MockChatOpenAI(responses={
-            "简历分析": json.dumps({
-                "tech_stack": ["Python", "PyTorch"],
-                "level": "中级",
-                "domains": ["NLP"],
-                "gaps": ["MLOps"],
-                "highlights": ["Built a RAG system"],
-                "years_of_experience": 3,
-            }),
-        })
+        mock = MockChatOpenAI(
+            responses={
+                "简历分析": json.dumps(
+                    {
+                        "tech_stack": ["Python", "PyTorch"],
+                        "level": "中级",
+                        "domains": ["NLP"],
+                        "gaps": ["MLOps"],
+                        "highlights": ["Built a RAG system"],
+                        "years_of_experience": 3,
+                    }
+                ),
+            }
+        )
         orig = llm_client_mod.get_llm
         llm_client_mod.get_llm = lambda *a, **kw: mock
 
@@ -65,13 +69,20 @@ class TestResumeAnalyst:
         from core.memory import MessageBus, SharedMemory
         from core.mock_llm import MockChatOpenAI
 
-        mock = MockChatOpenAI(responses={
-            "简历分析": json.dumps({
-                "tech_stack": ["Python"], "level": "初级",
-                "domains": [], "gaps": [], "highlights": [],
-                "years_of_experience": 1,
-            }),
-        })
+        mock = MockChatOpenAI(
+            responses={
+                "简历分析": json.dumps(
+                    {
+                        "tech_stack": ["Python"],
+                        "level": "初级",
+                        "domains": [],
+                        "gaps": [],
+                        "highlights": [],
+                        "years_of_experience": 1,
+                    }
+                ),
+            }
+        )
         orig = llm_client_mod.get_llm
         llm_client_mod.get_llm = lambda *a, **kw: mock
 
@@ -94,14 +105,20 @@ class TestResumeAnalyst:
         from core.memory import SharedMemory
         from core.mock_llm import MockChatOpenAI
 
-        mock = MockChatOpenAI(responses={
-            "简历分析": json.dumps({
-                "tech_stack": ["Go", "Kubernetes"], "level": "高级",
-                "domains": ["Infra"], "gaps": ["AI"],
-                "highlights": ["Designed microservices"],
-                "years_of_experience": 5,
-            }),
-        })
+        mock = MockChatOpenAI(
+            responses={
+                "简历分析": json.dumps(
+                    {
+                        "tech_stack": ["Go", "Kubernetes"],
+                        "level": "高级",
+                        "domains": ["Infra"],
+                        "gaps": ["AI"],
+                        "highlights": ["Designed microservices"],
+                        "years_of_experience": 5,
+                    }
+                ),
+            }
+        )
         orig = llm_client_mod.get_llm
         llm_client_mod.get_llm = lambda *a, **kw: mock
 
@@ -142,14 +159,20 @@ class TestResumeAnalyst:
         import core.llm_client as llm_client_mod
         from core.mock_llm import MockChatOpenAI
 
-        mock = MockChatOpenAI(responses={
-            "简历分析": json.dumps({
-                "tech_stack": ["Python"], "level": "中级",
-                "domains": ["NLP", "CV"], "gaps": ["MLOps"],
-                "highlights": ["RAG system"],
-                "years_of_experience": 2,
-            }),
-        })
+        mock = MockChatOpenAI(
+            responses={
+                "简历分析": json.dumps(
+                    {
+                        "tech_stack": ["Python"],
+                        "level": "中级",
+                        "domains": ["NLP", "CV"],
+                        "gaps": ["MLOps"],
+                        "highlights": ["RAG system"],
+                        "years_of_experience": 2,
+                    }
+                ),
+            }
+        )
         orig = llm_client_mod.get_llm
         llm_client_mod.get_llm = lambda *a, **kw: mock
 
@@ -157,7 +180,11 @@ class TestResumeAnalyst:
         try:
             result = agent.analyze("Data scientist 2 years")
             assert set(result.keys()) >= {
-                "tech_stack", "level", "domains", "gaps", "highlights",
+                "tech_stack",
+                "level",
+                "domains",
+                "gaps",
+                "highlights",
                 "years_of_experience",
             }
             assert isinstance(result["tech_stack"], list)

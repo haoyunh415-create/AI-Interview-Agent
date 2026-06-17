@@ -78,7 +78,11 @@ class Interviewer(BaseAgent):
         resolved_profile = self._resolve_profile(profile)
         resolved_context = self._resolve_context(topic, context)
         prompt = self._build_question_prompt(
-            topic, stage, resolved_context, history, resolved_profile,
+            topic,
+            stage,
+            resolved_context,
+            history,
+            resolved_profile,
         )
         question = self.invoke(prompt)
         self._publish_question(question, stage, is_followup=False)
@@ -102,7 +106,11 @@ class Interviewer(BaseAgent):
         resolved_profile = self._resolve_profile(profile)
         resolved_context = self._resolve_context(topic, context)
         prompt = self._build_question_prompt(
-            topic, stage, resolved_context, history, resolved_profile,
+            topic,
+            stage,
+            resolved_context,
+            history,
+            resolved_profile,
         )
         yield from self.invoke_stream(prompt)
 
@@ -116,9 +124,7 @@ class Interviewer(BaseAgent):
     ) -> str:
         history_context = ""
         if history:
-            history_context = "\n已问过的问题：\n" + "\n".join(
-                "- " + h["q"] for h in history[-3:]
-            )
+            history_context = "\n已问过的问题：\n" + "\n".join("- " + h["q"] for h in history[-3:])
 
         profile_context = ""
         level_bias = ""
@@ -156,10 +162,7 @@ class Interviewer(BaseAgent):
                 terms.append(f"  - {term} [{label}]")
         if not terms:
             return ""
-        return (
-            "\n候选人核心技术关键词（优先考察高权重的关键词）：\n"
-            + "\n".join(terms)
-        )
+        return "\n候选人核心技术关键词（优先考察高权重的关键词）：\n" + "\n".join(terms)
 
     def generate_followup(
         self,
@@ -213,8 +216,11 @@ class Interviewer(BaseAgent):
 
     def _publish_question(self, question: str, stage: str, is_followup: bool) -> None:
         event_type = Events.FOLLOWUP_GENERATED if is_followup else Events.QUESTION_GENERATED
-        self.publish_event(event_type, {
-            "question": question,
-            "stage": stage,
-            "is_followup": is_followup,
-        })
+        self.publish_event(
+            event_type,
+            {
+                "question": question,
+                "stage": stage,
+                "is_followup": is_followup,
+            },
+        )

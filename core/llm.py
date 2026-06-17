@@ -78,8 +78,12 @@ def get_llm(
     if key in _llms:
         return _llms[key]
 
-    _log.info("creating new LLM instance: provider=%s model=%s temp=%.1f",
-              resolved_provider, model or "(default)", temperature)
+    _log.info(
+        "creating new LLM instance: provider=%s model=%s temp=%.1f",
+        resolved_provider,
+        model or "(default)",
+        temperature,
+    )
     llm = _create_llm(resolved_provider, api_key, temperature, model)
     _llms[key] = llm
     return llm
@@ -151,10 +155,7 @@ def _create_llm(provider: str, api_key: str | None, temperature: float, model: s
     if provider == "ollama":
         return _create_ollama(temperature, model)
 
-    raise ValueError(
-        f"Unknown LLM_PROVIDER={provider!r}. "
-        f"Supported: {', '.join(_API_KEY_ENV_VARS.keys())}, ollama"
-    )
+    raise ValueError(f"Unknown LLM_PROVIDER={provider!r}. Supported: {', '.join(_API_KEY_ENV_VARS.keys())}, ollama")
 
 
 def _create_anthropic(api_key: str | None, temperature: float, model: str | None = None) -> Any:
@@ -162,10 +163,7 @@ def _create_anthropic(api_key: str | None, temperature: float, model: str | None
     try:
         from langchain_anthropic import ChatAnthropic
     except ImportError:
-        raise ImportError(
-            "Anthropic provider requires langchain-anthropic. "
-            "Install: pip install langchain-anthropic"
-        )
+        raise ImportError("Anthropic provider requires langchain-anthropic. Install: pip install langchain-anthropic")
     return ChatAnthropic(
         model=model or ANTHROPIC_MODEL,
         api_key=api_key or os.getenv("ANTHROPIC_API_KEY"),
@@ -180,10 +178,7 @@ def _create_ollama(temperature: float, model: str | None = None) -> Any:
     try:
         from langchain_ollama import ChatOllama
     except ImportError:
-        raise ImportError(
-            "Ollama provider requires langchain-ollama. "
-            "Install: pip install langchain-ollama"
-        )
+        raise ImportError("Ollama provider requires langchain-ollama. Install: pip install langchain-ollama")
     return ChatOllama(
         model=model or OLLAMA_MODEL,
         base_url=OLLAMA_BASE_URL,

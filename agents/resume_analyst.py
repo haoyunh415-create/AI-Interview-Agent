@@ -61,9 +61,7 @@ class ResumeAnalyst(BaseAgent):
             self.memory_set("resume.profile", _FALLBACK)
             return _FALLBACK.copy()
 
-        prompt = RESUME_ANALYST_TEMPLATE.format(
-            resume_text=resume_text[:2500]
-        )
+        prompt = RESUME_ANALYST_TEMPLATE.format(resume_text=resume_text[:2500])
         raw_profile = self.invoke_json_safe(prompt, fallback=_FALLBACK)
         profile = _ensure_fields(raw_profile)
 

@@ -1,4 +1,5 @@
 """API routes for reports."""
+
 import asyncio
 import json
 import os
@@ -11,9 +12,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from agents.report_writer import ReportWriter
+from backend.db.database import load_user
 from core.api_key import resolve_api_key
 from core.constants import STAGES
-from backend.db.database import load_user
 from report.report_generator import generate_pdf
 
 router = APIRouter()
@@ -110,17 +111,19 @@ def _compute_per_stage_breakdown(data: list[Any]) -> list[dict[str, Any]]:
             if scores:
                 score_avg = round(mean(scores), 1)
 
-        result.append({
-            "stage": stage_name,
-            "total": len(rows),
-            "answered_count": len(answered),
-            "skipped_count": len(skipped),
-            "score": score_avg,
-            "questions": [r["question"] for r in answered],
-            "answers": [r["answer"] for r in answered],
-            "scores": [r["score"] for r in answered],
-            "skipped_questions": [r["question"] for r in skipped],
-        })
+        result.append(
+            {
+                "stage": stage_name,
+                "total": len(rows),
+                "answered_count": len(answered),
+                "skipped_count": len(skipped),
+                "score": score_avg,
+                "questions": [r["question"] for r in answered],
+                "answers": [r["answer"] for r in answered],
+                "scores": [r["score"] for r in answered],
+                "skipped_questions": [r["question"] for r in skipped],
+            }
+        )
     return result
 
 
@@ -130,15 +133,15 @@ def _format_stages_for_prompt(stages: list[dict[str, Any]]) -> str:
     for s in stages:
         lines.append(f"\n[Stage {s['stage']}]")
         lines.append(f"Status: {s['answered_count']} answered, {s['skipped_count']} skipped")
-        if s['score'] is not None:
+        if s["score"] is not None:
             lines.append(f"Stage score: {s['score']}/100")
-        if s['answered_count'] > 0:
-            for q, a, sc in zip(s['questions'], s['answers'], s['scores']):
+        if s["answered_count"] > 0:
+            for q, a, sc in zip(s["questions"], s["answers"], s["scores"], strict=False):
                 lines.append(f"  Q: {q}")
                 lines.append(f"  A: {a[:200]}")
                 lines.append(f"  璇勫垎: {sc}")
-        if s['skipped_count'] > 0:
-            for q in s['skipped_questions']:
+        if s["skipped_count"] > 0:
+            for q in s["skipped_questions"]:
                 lines.append(f"  鈴笍 [宸茶烦杩嘳 {q}")
     return "\n".join(lines)
 
@@ -183,7 +186,9 @@ async def get_report(req: ReportRequest) -> ReportResponse:
             stages_text = _format_stages_for_prompt(stage_breakdown)
             summary = await asyncio.to_thread(
                 writer.generate_summary,
-                questions, answers, scores,
+                questions,
+                answers,
+                scores,
                 stages_text=stages_text,
             )
             ai_summary = summary

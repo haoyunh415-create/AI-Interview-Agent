@@ -13,9 +13,10 @@ import tempfile
 import pytest
 
 from agents.orchestrator import InterviewOrchestrator
+from backend.db.database import init_db, set_db_path
 from core.memory import Events
 from core.mock_llm import MockChatOpenAI
-from backend.db.database import init_db, set_db_path
+
 
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# Fixtures
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
@@ -118,14 +119,17 @@ class TestMockLLM:
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 class TestResumeAnalysis:
     def test_analyze_writes_to_shared_memory(self, orch, mock_llm):
-        mock_llm.responses["简历分析"] = json.dumps({
-            "tech_stack": ["Python", "PyTorch"],
-            "level": "中级",
-            "domains": ["NLP"],
-            "gaps": ["分布式"],
-            "highlights": ["RAG system"],
-            "years_of_experience": 2,
-        }, ensure_ascii=False)
+        mock_llm.responses["简历分析"] = json.dumps(
+            {
+                "tech_stack": ["Python", "PyTorch"],
+                "level": "中级",
+                "domains": ["NLP"],
+                "gaps": ["分布式"],
+                "highlights": ["RAG system"],
+                "years_of_experience": 2,
+            },
+            ensure_ascii=False,
+        )
 
         profile = orch.analyze_resume("Mock resume with Python and ML")
         assert profile is not None
@@ -165,7 +169,9 @@ class TestInterviewLifecycle:
         assert mock_llm.count_calls("invoke") >= 1
 
         score, report, _needs_followup = orch.evaluate_answer(
-            "test_user", "Transformer", q,
+            "test_user",
+            "Transformer",
+            q,
             "Self-Attention computes Q*K^T / sqrt(d_k) then softmax.",
             stage_idx=0,
         )
@@ -176,6 +182,7 @@ class TestInterviewLifecycle:
 
         # Verify persisted to DB
         from backend.db.database import load_user
+
         records = load_user("test_user")
         assert len(records) >= 1
 
@@ -184,7 +191,10 @@ class TestInterviewLifecycle:
 
         q = orch.generate_question("LoRA", stage_idx=0)
         _score, _report, needs_followup = orch.evaluate_answer(
-            "user", "LoRA", q, "I don't know much about LoRA.",
+            "user",
+            "LoRA",
+            q,
+            "I don't know much about LoRA.",
             stage_idx=0,
         )
         assert needs_followup is True
@@ -194,13 +204,13 @@ class TestInterviewLifecycle:
 
         history = []
         for stage_idx in range(3):
-            q = orch.generate_question(
-                "Transformer", stage_idx=stage_idx, history=history
-            )
+            q = orch.generate_question("Transformer", stage_idx=stage_idx, history=history)
             assert q != ""
 
             _score, _report, _needs_followup = orch.evaluate_answer(
-                "user", "Transformer", q,
+                "user",
+                "Transformer",
+                q,
                 f"Answer for stage {stage_idx}",
                 stage_idx=stage_idx,
             )
@@ -233,7 +243,11 @@ class TestErrorHandling:
 
         q = orch.generate_question("Transformer", stage_idx=0)
         score, _report, _needs_followup = orch.evaluate_answer(
-            "user", "Transformer", q, "Some answer", stage_idx=0,
+            "user",
+            "Transformer",
+            q,
+            "Some answer",
+            stage_idx=0,
         )
         assert score.get("_parse_error") is True
         assert score["correctness"] == 0
@@ -244,7 +258,11 @@ class TestErrorHandling:
 
         q = orch.generate_question("Transformer", stage_idx=0)
         _score, _report, needs_followup = orch.evaluate_answer(
-            "user", "Transformer", q, "Fine.", stage_idx=0,
+            "user",
+            "Transformer",
+            q,
+            "Fine.",
+            stage_idx=0,
         )
         assert needs_followup is True
 
