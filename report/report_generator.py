@@ -40,7 +40,8 @@ if CHINESE_FONT == "Helvetica":
 
 
 def generate_pdf(data, filename="outputs/reports/interview_report.pdf"):
-    # 2. 确保输出目录存在
+    # Ensure absolute path so reportlab writes to the correct location
+    filename = os.path.abspath(filename)
     os.makedirs(os.path.dirname(filename), exist_ok=True)
 
     doc = SimpleDocTemplate(filename, pagesize=A4)

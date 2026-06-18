@@ -215,11 +215,14 @@ def generate_report_pdf(req: ReportRequest) -> FileResponse:
     safe_user = safe_user.replace("..", "").replace("\\", "").replace("/", "")
     safe_user = safe_user.strip("-_. ") or "guest"
 
-    output_dir = "outputs/reports"
+    output_dir = os.path.abspath("outputs/reports")
     os.makedirs(output_dir, exist_ok=True)
     pdf_path = os.path.join(output_dir, f"{safe_user}_report.pdf")
 
     generate_pdf(data, pdf_path)
+
+    if not os.path.isfile(pdf_path):
+        raise HTTPException(500, f"PDF generation failed: {pdf_path}")
 
     return FileResponse(
         pdf_path,
