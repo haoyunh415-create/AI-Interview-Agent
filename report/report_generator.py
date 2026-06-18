@@ -8,6 +8,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
+# Font paths keyed by platform.  CJK-capable fonts are listed first;
+# fallback Western fonts last — only the former get wordWrap="CJK".
 _FONT_PATHS = {
     "Windows": ["C:/Windows/Fonts/simhei.ttf", "C:/Windows/Fonts/msyh.ttc"],
     "Darwin": [
@@ -21,7 +23,10 @@ _FONT_PATHS = {
     ],
 }
 
+# ── Font discovery ──────────────────────────────────────────────
 CHINESE_FONT = "Helvetica"
+_CJK_CAPABLE = False  # only set True when a real CJK font is found
+
 _font_paths = [
     *_FONT_PATHS.get(platform.system(), []),
     os.path.join(os.path.dirname(__file__), "..", "fonts", "SimHei.ttf"),
@@ -32,6 +37,8 @@ for fp in _font_paths:
         try:
             pdfmetrics.registerFont(TTFont("CJKFont", fp))
             CHINESE_FONT = "CJKFont"
+            # Treat the font as CJK-capable unless it is DejaVu (Western fallback)
+            _CJK_CAPABLE = "dejavu" not in fp.lower()
             break
         except Exception:
             continue
@@ -49,6 +56,10 @@ def generate_pdf(data, filename="outputs/reports/interview_report.pdf"):
     dirname = os.path.dirname(filename)
     os.makedirs(dirname, exist_ok=True)
 
+    # Only enable CJK word-wrap when we have a genuine CJK font;
+    # using it with a Western font (e.g. DejaVu Sans) crashes reportlab.
+    _word_wrap = "CJK" if _CJK_CAPABLE else "normal"
+
     try:
         doc = SimpleDocTemplate(filename, pagesize=A4)
         styles = getSampleStyleSheet()
@@ -59,7 +70,7 @@ def generate_pdf(data, filename="outputs/reports/interview_report.pdf"):
             fontName=CHINESE_FONT,
             fontSize=10,
             leading=15,
-            wordWrap="CJK" if CHINESE_FONT != "Helvetica" else "normal",
+            wordWrap=_word_wrap,
         )
 
         title_style = ParagraphStyle(
@@ -88,21 +99,15 @@ def generate_pdf(data, filename="outputs/reports/interview_report.pdf"):
         doc.build(content)
 
     except Exception as exc:
-        raise RuntimeError(
-            f"PDF generation failed: {exc}\n{traceback.format_exc()}"
-        ) from exc
+        raise RuntimeError(f"PDF generation failed: {exc}\n{traceback.format_exc()}") from exc
 
     # Verify the file was actually written
     if not os.path.isfile(filename):
-        # List directory to help debug
         try:
             files = os.listdir(dirname)
         except Exception:
             files = ["<cannot list>"]
-        raise RuntimeError(
-            f"PDF file not found after build: {filename}\n"
-            f"Directory contents ({dirname}): {files}"
-        )
+        raise RuntimeError(f"PDF file not found after build: {filename}\nDirectory contents ({dirname}): {files}")
 
     print(f"报告已生成至: {filename}")
     return filename
