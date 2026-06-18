@@ -1,5 +1,6 @@
 import os
 import platform
+import traceback
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -40,50 +41,68 @@ if CHINESE_FONT == "Helvetica":
 
 
 def generate_pdf(data, filename="outputs/reports/interview_report.pdf"):
-    # Ensure absolute path so reportlab writes to the correct location
+    """Generate a PDF report. Returns the absolute path to the created file.
+
+    Raises RuntimeError if PDF generation fails.
+    """
     filename = os.path.abspath(filename)
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    dirname = os.path.dirname(filename)
+    os.makedirs(dirname, exist_ok=True)
 
-    doc = SimpleDocTemplate(filename, pagesize=A4)
-    styles = getSampleStyleSheet()
+    try:
+        doc = SimpleDocTemplate(filename, pagesize=A4)
+        styles = getSampleStyleSheet()
 
-    # 3. 自定义中文样式
-    custom_style = ParagraphStyle(
-        "ChineseStyle",
-        parent=styles["Normal"],
-        fontName=CHINESE_FONT,
-        fontSize=10,
-        leading=15,  # 行间距
-        wordWrap="CJK",  # 允许中文字符换行
-    )
-
-    title_style = ParagraphStyle(
-        "TitleStyle",
-        parent=styles["Title"],
-        fontName=CHINESE_FONT,
-        fontSize=18,
-        alignment=1,  # 居中
-        spaceAfter=20,
-    )
-
-    content = []
-
-    # 添加标题
-    content.append(Paragraph("AI 面试评估报告", title_style))
-    content.append(Spacer(1, 12))
-
-    # 4. 遍历数据 — data rows are sqlite3.Row objects, access by column name
-    for i, row in enumerate(data):
-        text = (
-            f"<b>问题 {i + 1}:</b> {row['question']}<br/>"
-            f"<b>回答:</b> {row['answer']}<br/>"
-            f"<b>AI 评分:</b><br/>{row['score']}<p/>"
+        custom_style = ParagraphStyle(
+            "ChineseStyle",
+            parent=styles["Normal"],
+            fontName=CHINESE_FONT,
+            fontSize=10,
+            leading=15,
+            wordWrap="CJK" if CHINESE_FONT != "Helvetica" else "normal",
         )
 
-        content.append(Paragraph(text, custom_style))
-        content.append(Spacer(1, 10))
-        content.append(Paragraph("-" * 80, custom_style))  # 分隔线
+        title_style = ParagraphStyle(
+            "TitleStyle",
+            parent=styles["Title"],
+            fontName=CHINESE_FONT,
+            fontSize=18,
+            alignment=1,
+            spaceAfter=20,
+        )
 
-    # 5. 执行构建
-    doc.build(content)
+        content = []
+        content.append(Paragraph("AI 面试评估报告", title_style))
+        content.append(Spacer(1, 12))
+
+        for i, row in enumerate(data):
+            text = (
+                f"<b>问题 {i + 1}:</b> {row['question']}<br/>"
+                f"<b>回答:</b> {row['answer']}<br/>"
+                f"<b>AI 评分:</b><br/>{row['score']}<p/>"
+            )
+            content.append(Paragraph(text, custom_style))
+            content.append(Spacer(1, 10))
+            content.append(Paragraph("-" * 80, custom_style))
+
+        doc.build(content)
+
+    except Exception as exc:
+        raise RuntimeError(
+            f"PDF generation failed: {exc}\n{traceback.format_exc()}"
+        ) from exc
+
+    # Verify the file was actually written
+    if not os.path.isfile(filename):
+        # List directory to help debug
+        try:
+            files = os.listdir(dirname)
+        except Exception:
+            files = ["<cannot list>"]
+        raise RuntimeError(
+            f"PDF file not found after build: {filename}\n"
+            f"Directory contents ({dirname}): {files}"
+        )
+
     print(f"报告已生成至: {filename}")
+    return filename

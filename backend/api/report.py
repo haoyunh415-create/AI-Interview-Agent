@@ -219,10 +219,10 @@ def generate_report_pdf(req: ReportRequest) -> FileResponse:
     os.makedirs(output_dir, exist_ok=True)
     pdf_path = os.path.join(output_dir, f"{safe_user}_report.pdf")
 
-    generate_pdf(data, pdf_path)
-
-    if not os.path.isfile(pdf_path):
-        raise HTTPException(500, f"PDF generation failed: {pdf_path}")
+    try:
+        pdf_path = generate_pdf(data, pdf_path)
+    except RuntimeError as exc:
+        raise HTTPException(500, str(exc)) from exc
 
     return FileResponse(
         pdf_path,
