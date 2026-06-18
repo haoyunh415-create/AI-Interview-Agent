@@ -552,8 +552,6 @@ class TestReport:
                 "user": "guest",
             },
         )
-        if resp.status_code != 200:
-            print(f"PDF ERROR BODY: {resp.json()}")
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "application/pdf"
 

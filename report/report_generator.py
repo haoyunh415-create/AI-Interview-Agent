@@ -61,7 +61,6 @@ def generate_pdf(data, filename="outputs/reports/interview_report.pdf"):
     _word_wrap = "CJK" if _CJK_CAPABLE else "normal"
 
     try:
-        doc = SimpleDocTemplate(filename, pagesize=A4)
         styles = getSampleStyleSheet()
 
         custom_style = ParagraphStyle(
@@ -96,7 +95,11 @@ def generate_pdf(data, filename="outputs/reports/interview_report.pdf"):
             content.append(Spacer(1, 10))
             content.append(Paragraph("-" * 80, custom_style))
 
-        doc.build(content)
+        # Use explicit binary file handle — on Linux reportlab may
+        # silently skip writing when only given a filename string.
+        with open(filename, "wb") as fh:
+            doc = SimpleDocTemplate(fh, pagesize=A4)
+            doc.build(content)
 
     except Exception as exc:
         raise RuntimeError(f"PDF generation failed: {exc}\n{traceback.format_exc()}") from exc
